@@ -1,0 +1,277 @@
+---
+title: "Single-Cell Analysis Workflow"
+author: "Thomas Tellner"
+date: "August 10, 2022"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(ggplot2)
+```
+## Motivation
+
+Single-Cell Analysis is a relatively new technique that is allowing scientists in the fields of medicine and life sciences exciting new insights into questions involving numerous biological processes at the genomic level. Single cell analysis involves adding a barcode to the cells so each can be identified specifically in down-stream analysis. This differs from traditional analysis, where cells from organs are ground up and the presence of genes (aka gene expression) is averaged over the sample. This traditional approach does not allow for individualized therapies being derived for patients.
+
+For example, using traditional bulk sequencing of genes, you could take samples from stricken patients and compare the results with samples of healthy patients. This gives the researcher an average difference in general but provides no insights into individual case. Single-Cell Analysis, unlike bulk sequencing, does provide a path to insights into individual cases by allowing researchers to analyze, for example, immune cells that could help fight the cancer or mutations causing it.
+
+Gathering data creates very high-dimensional, sparse and noisy data that must be carefully handled. Clustering is an extremely important method in identifying cell types that give researchers clues to what is going on inside the patient's system.
+
+The goals are twofold:
+
+1. Can we use a neural network to produce better clustering - or comparable - to the baseline method; 
+
+2. Can we execute this process more efficiently to reach a point at which we can visualize some or all of the data in 2D?
+
+## The Data
+
+The data chosen to be analyzed meets expectations of being high dimensionality, sparse and noisy. However, it is also well-documented so that we have a solid "baseline" against which we can compare our results.
+
+The dataset is the Peripheral Blood Mononuclear Cell database freely available from 10x Genomics. The sample was taken from one healthy subject. The dimensions (in R) are 13714 x 2640. The "rows" are actually features and the columns samples of cells. The matrix consists of counts of genes in each cell. 
+
+After we load the data and create a Seurat object produced by an R package for Single-Cell Analysis that is related to the larger Bioconductor package. As has already been mentioned, this is a well-documented dataset, so rather than search for a good sample in this very sparse matrix to demonstrate, let's show three well-known genes. 
+
+```{r, echo=FALSE}
+# Unzip the PBMC dataset
+untar("pbmc3k_filtered_gene_bc_matrices.tar.gz")
+```
+
+```{r, echo=FALSE}
+# Load the PBMC dataset and load into Seurat object
+pbmc.data <- Read10X(data.dir = "filtered_gene_bc_matrices/hg19/")
+pbmc.data[c("CD3D", "TCL1A", "MS4A1"), 1:30]
+```
+
+The above display supresses the very long barcode chains above the columns that identify the cells. The test on the left, such as CD3D, is a gene. The dots represent a 0 count. This demonstrates the sparsity of the count matrix. It is important to note that the 0 reads are not missing data - their absence is as telling as their presence because this is how one interprets the make-up and function of the cell.
+
+```{r, echo=FALSE}
+# Load the PBMC dataset and load into Seurat object
+pbmc1 <- CreateSeuratObject(counts = pbmc.data, project = "pbmc3k", min.cells = 3, min.features = 200)
+pbmc1
+```
+
+## Data Prep and QC
+
+Also, Seurat automatically reads the data in but only includes genes (rows) that are expressed in at least 3 cells (cols) and keep only cells (cols) that have at least 200 genes. The Seurat object also creates metadata that includes two aggregated counts of genes in cells. These are two standard columns. However, in order to do a little QC, we need to add a "% mitochondrial genome"" ( genes which begin with MT).
+
+```{r, echo=FALSE}
+# Create a mitochondrial count and then convert it to a percentage of the total counts in the cell.
+pbmc1[["percent.mt"]] <- PercentageFeatureSet(pbmc1, pattern = "^MT-")
+```
+
+```{r, echo=FALSE}
+# Show first 5 rows of count data
+head(pbmc1@meta.data, 5)
+```
+
+Going into a little more important detail, we see we have the cells identified with a barcode as rows and certain aggregated counts as columns. 
+
+"nCount_RNA" = Count of the molecules in that cell
+"nFeature_RNA" = Count of genes in that cell
+"percent.mt" = Percent mitochodrial to others
+
+This is where QC decisions come into play. If either "nCount_RNA" or "nFeature_RNA" are low, then this indicates a poor sample - or no sample. If they are high, then there could be a "doublet", i.e., more than one cell present. Lastly, "percent.mt" if too high indicates a dying cell. A cell "dies" and its cell walls disintegrate allowing molecules to pass through it - smallest ones first. Mitochondrial are the largest so will remain the longest. 
+
+We need to filter for these suspicious cells. We pick the limits by using visualizations. First, use violin plots:
+
+```{r, echo=FALSE}
+# Visualize QC metrics as a violin plot
+VlnPlot(pbmc1, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+```
+
+The violin plots can be misleading or simply hard to interpret - at least in terms of the nFeature_RNA and nCount_RNA - since we see two raw counts, but don't have a standard against which we can measure. The "percent.mt" which is a ratio of mitochondrial genes to all genes (features). So we need a visualization to set some standard of how many genes to total cells we should work with.
+
+```{r, echo=FALSE}
+plot = FeatureScatter(pbmc1, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") +
+  geom_smooth(method = "lm")
+plot
+```
+
+Here, we compare genes to cells. Cell data that follow the line indicate quality. Reads in the lower right corner indicate that the data includes few genes being sequenced over and over. Reads in the upper left mean that there are a high number of genes, but the sequencing is not detailed enough. Either way, reads being too far afield from the line are candidates for removal without question.
+
+From this analysis, we can reasonbaly choose a subset of gene counts greater than 200 and less than 2500. This is somewhat standard. Additionally, we'll excluded cells with mitochondrial genes making up greater than 5% of their total.
+
+```{r, echo=FALSE}
+pbmc_sub <- subset(pbmc1, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+```
+
+```{r, echo=FALSE}
+#saveRDS(pbmc_sub, file = "./output/pbmc_sub.rds")
+```
+
+Next, we normalize the data. The default parameters are used and listed, though IRL not necessary. We normalize in order to compare gene expression across multiple cells. This is done by standard functions. We choose to Log Normalize based on the data and our downstream needs.
+
+```{r,, echo=FALSE}
+pbmc_sub <- NormalizeData(pbmc_sub, normalization.method = "LogNormalize", scale.factor = 10000)
+```
+
+We next calculate a subset of features that exhibit high cell-to-cell variation in the dataset. This means they are highly expressed in some cells, and lowly expressed in others. Seurat's methodology leverages the mean-variance relationship inherent in single-cell data. By default, it returns 2000 genes. 
+
+We can visualize the variability as in a very revealing chart. The standard 2000 deliver more variable cells than there really are as can be seen by the "variable count" color also clustering low, close to "non-variable". Still, this shows us the cells that are objectively highly variable. 
+
+The calculations also target the top ten in terms of variability that can be later used in PCA. Before that, we will scale ALL genes in order to use heatmaps later.
+
+```{r, echo=FALSE}
+pbmc_subVar <- FindVariableFeatures(pbmc_sub, selection.method = "vst", nfeatures = 2000)
+
+# Identify the 10 most highly variable genes
+top10 <- head(VariableFeatures(pbmc_subVar), 10)
+
+# plot variable features with and without labels
+plot1 <- VariableFeaturePlot(pbmc_subVar)
+plot2 <- LabelPoints(plot = plot1, points = top10, repel = TRUE)
+plot1
+```
+
+```{r, echo=FALSE}
+all.genes <- rownames(pbmc_subVar)
+pbmc_scaled <- ScaleData(pbmc_subVar, features = all.genes)
+```
+## Moving toward clusters
+
+At this point, the scaled data is saved out as a csv file for use in Python after we complete clustering in Seurat and want to perform alternative clustering in Python with a neural network.
+
+Continuing on with Seurat, we perform linear dimensional reduction using PCA. By default, we only use the highly variable features we defined up above. We can then display the genes in the first two dimensions so we can use those later for detailed analysis as part of this demonstration.
+
+```{r, echo=FALSE}
+pbmc_dimRed <- RunPCA(pbmc_scaled, features = VariableFeatures(object = pbmc_scaled))
+```
+
+```{r, echo=FALSE}
+# Examine and visualize PCA results a few different ways
+print(pbmc_dimRed[["pca"]], dims = 1:2, nfeatures = 5)
+```
+We will use more visualizations to help us determine the proper dimensionality we want to procede with.
+
+```{r, echo=FALSE}
+DimHeatmap(pbmc_dimRed, dims = 1:10, cells = 500, balanced = TRUE)
+```
+The above heatmap clearly shows "noisy" dimensions. PC_1 and PC_2 show a very marked structure - evidenced by the relatively clean separation of purple and yellow. This is as opposed to PC_9, which is blurred and highly muddled. We can hypothesize that we should see significant ground covered by the first to PCs in terms of explaining variability based on the quality of their structure.
+
+Let's test this hypothesis out with an Elbow Plot:
+
+```{r, echo=FALSE}
+ElbowPlot(pbmc_dimRed)
+```
+
+As expected, the first two dimensions explain a significant portion of the variability - but not as much as one would like. It looks like the optimal is 9-10. We'll accept the standard "go higher rather than lower" and choose 10 as our dimensionality.
+
+## Clustering - KNN Graph-Based Approach
+
+Seurat comes packaged with a clustering algorithm that is KNN graph-based and iterative. The authors of the original study us a KNN graph-based approach to cluster that leverages Euclidean distance and Jaccard similarity. There is a "distance metric" which drives the clustering. However, specific to single-cell sequencing activity, the method used embeds cells in a graph structure - hence "graph-based" - based on KNN. Edges represent similar feature patterns. From there, clustering is conducted. Jaccard similarity is also involved to refine edge weights.
+
+Clustering is done iteratively optimizing the standard modularity function. Going into further detail is beyond the scope or need of this study. After this is complete, cluster membership can be inspected. This will also be saved out to a csv file for use in Python later as well.
+
+Below is the first "identities" of the first five cells:
+
+
+```{r, echo=FALSE}
+pbmc_knn <- FindNeighbors(pbmc_dimRed, dims = 1:10)
+pbmc_clust <- FindClusters(pbmc_knn, resolution = 0.5)
+```
+
+
+```{r, echo=FALSE}
+# Look at cluster IDs of the first 5 cells
+head(Idents(pbmc_clust), 5)
+```
+
+At this point, much of the "heavy lifting" is done and we can begin to create visualizations.
+
+First, let's create a "dimplot" of our 9 groups.
+
+```{r, echo=FALSE}
+DimPlot(pbmc_clust, dims=c(1,2), group.by = "RNA_snn_res.0.5", label = TRUE)
+```
+```{r, echo=FALSE}
+DimPlot(pbmc_clust, dims=c(9,10), group.by = "RNA_snn_res.0.5", label = TRUE)
+```
+Here we've had a little fun - we plotted the two well-behaved dimensions and then done so again for the two worst-behaved (9 and 10) of our 10 dimensions. The difference in quality of the clustering is striking!
+
+## Beyond Initial Clustering: UMAP and More Analysis
+
+However, remember that PCA is linear dimension reduction. With the high number of dimensions, PCA will not get you to two dimensions in order to visualize the data. Therefore, it is advisable to apply a second round of dimension reduction - this time non-linear. For this, we have two candidates: tSNE and UMAP.
+
+UMAP handles sparse data better than tSNE. Additionally, there is growing concensus that UMAP preserves the original structure better as well.
+
+So, we run UMAP nonlinear dimensional reduction to visualize and explore the data by placing similar cells together in low-dimensional space. Then, we create another dimplot.
+
+```{r, echo=FALSE}
+pbmc_umap <- RunUMAP(pbmc_clust, dims = 1:10)
+```
+
+```{r, echo=FALSE}
+# note that you can set `label = TRUE` or use the LabelClusters function to help label
+# individual clusters
+DimPlot(pbmc_umap, reduction = "umap", label = TRUE)
+```
+We have now achieved clustering and displayed those clusters in two dimensions! The above graph is clearly of better quality that the PCA-based plots above.
+
+Seurat can help us determine what these clusters represent by finding "biomarkers".
+
+Seurat can help you find markers that define clusters via differential expression. By default, it identifies positive and negative markers of a single cluster compared to all other cells. Seurat automates this process for all clusters, but you can also test groups of clusters vs. each other, or against all cells.
+
+With biomarkers assigned, we can actually plot the cells with their identities. This allows us to drill down or subset the data into pairs etc for study.
+
+We can pull a list of known gene cell names and replace the numbers in order to see where these cells appear in the clusters.
+
+```{r, echo=FALSE}
+new.cluster.ids <- c("Naive CD4 T", "CD14+ Mono", "Memory CD4 T", "B", "CD8 T", "FCGR3A+ Mono",
+    "NK", "DC", "Platelet")
+names(new.cluster.ids) <- levels(pbmc_umap)
+pbmc_named <- RenameIdents(pbmc_umap, new.cluster.ids)
+DimPlot(pbmc_named, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
+```
+
+```{r, echo=FALSE}
+# find markers for every cluster compared to all remaining cells, report only the positive
+# ones
+pbmc_marked.markers <- FindAllMarkers(pbmc_umap, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+pbmc_marked.markers %>%
+    group_by(cluster) %>%
+    slice_max(n = 2, order_by = avg_log2FC)
+```
+
+We can also find the locations of specific cells and see how dispersed they are. In a quality clustering, "completeness" is a metric that measures how many cells were clustered in one cell and one cell only. If you repeat this with other cells - and some of them appear in the same cluster - you could explore the possibility that they have the same biological function - maybe even being a type of immune cell not yet leveraged for therapies. 
+
+An example is below. Any cell starting with "CD" is an immune cell. MS4A1 is not clustered with the immune cell so is likely not related to immune functions. From the dimplots above, you can see that the cluster in which MS4A1 resides is almost exclusively just that gene. The cluster containing the immune cell shares the cluster with other genes - which also appear to be immune cell genes. 
+
+A quick internet search reveals that "MS4A1" is involved in turning B-cells into plasma - which is a form of a immune functionaality. Also, there is a hierarchy: "MS4A1" is a part of a B-cell - and Seurat caught it by labeling that cluster "B". Any other gene that has significant expression in that cluster could likely become part of the B-cell's genome.
+
+```{r, echo=FALSE}
+FeaturePlot(pbmc_umap, features = c("MS4A1", "CD3E"))
+```
+
+Lastly, we can use a violin plot in a similar manner. Below, we've distributed the expression of the same two genes by cluster. MS4A1 is almost completely restricted to cluster 3, while CD3E is more dispersed.
+
+```{r, echo=FALSE}
+VlnPlot(pbmc_umap, features = c("MS4A1", "CD3E"))
+```
+
+## Conclusion to Part 1: R/Seurat
+
+With 13,714 genes with which to work, the possibilities are almost limitless. However, with the potential advantages come potential disadvantages - including the shear size of the data and its characteristics (such as sparsity).
+
+Clustering must be completed with extreme care. To do so:
+
+Prep and run quality control on the data
+
+1. Filter aggressively
+2. Best in "well-behaved" cells (see graph where they follow the line)
+3. Variable genes accounted for (scaled ALL not just variable)
+
+Run PCA
+
+1. Extract most interesting signals
+2. Take top PCs. Reduce dimensionality (but not to 2!)
+
+Run UMAP
+
+1. Calculate distances from PCA projections
+2. Scale distances and project into 2D.
+
+At this point, we need to turn to Python in order to explore using a neural network to cluster the data. We will be using a Variational AutoEncoder (VAE) with Agglomerative Clustering and then comparing. Since VAEs have inherent dimensional reduction, we can explore whether or not we need 2 rounds of reduction as we did here.
