@@ -126,8 +126,8 @@ with st.sidebar:
 # ---- MAIN PAGE ----
 st.title("Welcome to My Data Science Portfolio")
 st.write("""
-Hello! I'm **Thomas Tellner**, and this is my interactive portfolio of data science projects.  
-Each page demonstrates a specific technique — from machine learning and NLP to data visualization and MLOps on cloud platforms.
+Hello! I'm **Thomas Tellner**, and this is my interactive - and still under construction - portfolio of data science projects.  
+Each page demonstrates models used in a specific use case — from Banking/Lending to Finance/Investments to Bioinformatics. I've also included some newer types of models of interest to me.
 """)
 
 st.markdown("""
