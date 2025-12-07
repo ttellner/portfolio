@@ -32,7 +32,7 @@ st.write("""ML/AI for Bioinformatics and Omics
          Explore and run machine learning demos below.""")
 
 # --- Base directory for project files ---
-base_dir = os.path.join("portfolio", "pages", "bioinfprojects")
+base_dir = os.path.join(os.getcwd(), "pages", "bioinfprojects")
 
 # Handle internal navigation (when a project is selected)
 query_params = st.query_params
@@ -93,4 +93,5 @@ else:
                     )
 
                     st.markdown("---")
+
 
