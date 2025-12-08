@@ -43,11 +43,21 @@ git push origin main
    - **Source directory**: `/` (root directory - leave as default)
    - Deployment trigger: "Automatic" (deploys on every push)
 
-3. **Configure Build**
-   - **Build type**: Select "Docker" (App Runner will auto-detect the Dockerfile)
-   - **Dockerfile path**: `Dockerfile` (default, should auto-populate)
-   - **Docker build context**: `.` (root directory, default)
-   - **Note**: You do NOT need `apprunner.yaml` for Docker builds - App Runner uses the Dockerfile directly
+3. **Configure Build Settings**
+
+   You have two options:
+
+   **Option A: Configure all settings here (Recommended for Docker)**
+   - **Runtime**: Select "Docker" or leave as auto-detected
+   - **Build Command**: Leave **EMPTY** (Docker handles the build automatically via the Dockerfile's RUN commands)
+   - **Start Command**: Leave **EMPTY** (App Runner will use the `CMD` from the Dockerfile)
+     - If the field is required and won't accept empty, enter: `streamlit run Home.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false`
+   - **Port**: `8501`
+
+   **Option B: Use a configuration file**
+   - Select "Use a configuration file"
+   - App Runner will read `apprunner.yaml` from your repository
+   - The `apprunner.yaml` file is already configured for Docker builds
 
 4. **Configure Service**
    - Service name: `portfolio-streamlit` (or your preferred name)
