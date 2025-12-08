@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import re
 import importlib.util
+from pathlib import Path
 from theme import apply_theme
 
 # ---- PAGE CONFIG ----
@@ -32,16 +33,18 @@ st.write("""ML/AI for Bioinformatics and Omics
          Explore and run machine learning demos below.""")
 
 # --- Base directory for project files ---
-base_dir = os.path.join(os.getcwd(), "pages", "bioinfprojects")
+# Use Path(__file__).parent to get the directory containing this file
+# Then navigate to bioinfprojects relative to this file's location
+base_dir = Path(__file__).parent / "bioinfprojects"
 
 # Handle internal navigation (when a project is selected)
 query_params = st.query_params
 if "project" in query_params:
     project_file = query_params["project"]
-    project_path = os.path.join(base_dir, project_file)
+    project_path = base_dir / project_file
 
-    if os.path.exists(project_path):
-        spec = importlib.util.spec_from_file_location("project_module", project_path)
+    if project_path.exists():
+            spec = importlib.util.spec_from_file_location("project_module", str(project_path))
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
@@ -52,10 +55,10 @@ if "project" in query_params:
         st.error(f"Project file not found: {project_path}")
 
 # --- Scan for available ML projects (.py files) ---
-if not os.path.exists(base_dir):
+if not base_dir.exists():
     st.warning(f"No ML project directory found at: {base_dir}")
 else:
-    project_files = [f for f in os.listdir(base_dir) if f.endswith(".py") or f.endswith(".RMD")]
+    project_files = [f.name for f in base_dir.iterdir() if f.suffix in [".py", ".RMD"]]
     if not project_files:
         st.info("No ML projects found in this folder.")
     else:
@@ -65,7 +68,7 @@ else:
             for j, project_file in enumerate(project_files[i:i + num_cols]):
                 with cols[j]:
                     # Extract metadata from docstring if available
-                    path = os.path.join(base_dir, project_file)
+                    path = base_dir / project_file
                     with open(path, "r", encoding="utf-8") as f:
                         content = f.read()
                         docstring = re.search(r'"""(.*?)"""', content, re.DOTALL)
