@@ -294,6 +294,8 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
         if scoring == 'roc_auc':
             def score_func(model, X, y):
                 y_pred_proba = model.predict_proba(X)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X)
+                # For binary classification, roc_auc_score doesn't need multi_class parameter
+                # Ensure y is binary (0/1) and predictions are probabilities
                 return roc_auc_score(y, y_pred_proba)
         elif scoring == 'accuracy':
             def score_func(model, X, y):
@@ -314,6 +316,12 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
         
         if use_sklearn_perm:
             try:
+                # For sklearn's permutation_importance, use the custom score_func
+                # This avoids issues with roc_auc_score and multi_class parameter
+                # Wrap score_func to match sklearn's expected signature: (model, X, y) -> float
+                def sklearn_scorer(model, X, y):
+                    return score_func(model, X, y)
+                
                 # For ScorecardModel wrapper, we need to create a compatible interface
                 if hasattr(model, 'predict_proba'):
                     # Model is already a ScorecardModel
@@ -321,7 +329,7 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
                         model, X_array, y, 
                         n_repeats=n_repeats, 
                         random_state=random_state,
-                        scoring=scoring,
+                        scoring=sklearn_scorer,
                         n_jobs=-1
                     )
                 else:
@@ -350,7 +358,7 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
                         wrapped_model, X_array, y,
                         n_repeats=n_repeats,
                         random_state=random_state,
-                        scoring=scoring,
+                        scoring=sklearn_scorer,
                         n_jobs=-1
                     )
                 
