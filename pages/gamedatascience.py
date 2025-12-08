@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import re
 import importlib.util
+from pathlib import Path
 from theme import apply_theme
 
 # ---- PAGE CONFIG ----
@@ -32,11 +33,12 @@ if "chapter" in query_params and "project" in query_params:
     chapter = query_params["chapter"]
     project_file = query_params["project"]  # exact filename must include .py
     
-    # Full path to the project file
-    project_path = os.path.join(os.getcwd(), "pages", "gamedatascience", chapter, project_file)
+    # Full path to the project file - use dynamic path based on file location
+    base_dir = Path(__file__).parent / "gamedatascience"
+    project_path = base_dir / chapter / project_file
 
-    if os.path.exists(project_path):
-        spec = importlib.util.spec_from_file_location("project_module", project_path)
+    if project_path.exists():
+        spec = importlib.util.spec_from_file_location("project_module", str(project_path))
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
@@ -50,17 +52,17 @@ st.title("Game Data Science")
 st.write("""Game Data Science
          Labs for the book "Game Data Science", converted from R to Python.""")
 
-# Base folder for the book project
-base_dir = "pages/gamedatascience"
+# Base folder for the book project - use dynamic path
+base_dir = Path(__file__).parent / "gamedatascience"
 
 # Scan chapters (folders)
-chapter_dirs = sorted([d for d in os.listdir(base_dir) if os.path.isdir(os.path.join(base_dir, d))])
+chapter_dirs = sorted([d.name for d in base_dir.iterdir() if d.is_dir()])
 
 for chapter in chapter_dirs:
     st.header(f"🗂 {chapter.replace('_', ' ')}")
     
-    chapter_path = os.path.join(base_dir, chapter)
-    project_files = sorted([f for f in os.listdir(chapter_path) if f.endswith(".py")])
+    chapter_path = base_dir / chapter
+    project_files = sorted([f.name for f in chapter_path.iterdir() if f.suffix == ".py"])
     
     if not project_files:
         st.info("No projects found in this chapter.")
@@ -72,7 +74,7 @@ for chapter in chapter_dirs:
         cols = st.columns(num_cols)
         for j, project_file in enumerate(project_files[i:i+num_cols]):
             with cols[j]:
-                project_path = os.path.join(chapter_path, project_file)
+                project_path = chapter_path / project_file
                 # Read top docstring for metadata
                 with open(project_path, "r", encoding="utf-8") as f:
                     content = f.read()
