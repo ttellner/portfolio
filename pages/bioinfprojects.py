@@ -44,7 +44,7 @@ if "project" in query_params:
     project_path = base_dir / project_file
 
     if project_path.exists():
-            spec = importlib.util.spec_from_file_location("project_module", str(project_path))
+        spec = importlib.util.spec_from_file_location("project_module", str(project_path))
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
