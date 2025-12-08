@@ -40,10 +40,10 @@ def find_r_executable():
             continue
     return None
 
-def execute_python_code(code, cell_index):
-    """Execute Python code and return output."""
-    try:
-        # Create a namespace for the code execution
+def get_persistent_namespace():
+    """Get or create a persistent namespace for code execution."""
+    if 'notebook_namespace' not in st.session_state:
+        # Initialize namespace with common libraries
         namespace = {
             '__builtins__': __builtins__,
             'st': st,
@@ -78,6 +78,16 @@ def execute_python_code(code, cell_index):
             namespace['sklearn'] = __import__('sklearn')
         except:
             pass
+        
+        st.session_state.notebook_namespace = namespace
+    
+    return st.session_state.notebook_namespace
+
+def execute_python_code(code, cell_index):
+    """Execute Python code and return output using persistent namespace."""
+    try:
+        # Get persistent namespace
+        namespace = get_persistent_namespace()
         
         # Capture stdout and stderr
         from io import StringIO
@@ -223,6 +233,15 @@ def display_notebook_interactive(notebook_path):
     r_available = find_r_executable() is not None
     if not r_available:
         st.info("ℹ️ R is not available. R code cells will not be executable. Install R to enable R code execution.")
+    
+    # Add a button to clear/reset the namespace
+    col1, col2 = st.columns([1, 5])
+    with col1:
+        if st.button("🔄 Clear Variables", help="Clear all variables and reset the execution environment"):
+            if 'notebook_namespace' in st.session_state:
+                del st.session_state.notebook_namespace
+            st.success("Variables cleared! Re-run cells to start fresh.")
+            st.rerun()
     
     # Display cells
     for i, cell in enumerate(cells):
