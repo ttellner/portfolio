@@ -359,9 +359,12 @@ def score_data(df_woe, model, vars_to_bin, feature_columns=None, use_woe=True):
         else:
             # Need to convert dataframe to images
             from .preprocessing import convert_to_image_grid
+            # Filter feature_columns to only those that exist in dataframe
+            # and exclude any target-like columns (defensive)
+            available_feature_cols = [col for col in feature_columns if col in df_woe.columns] if feature_columns else None
             X = convert_to_image_grid(
                 df_woe,
-                feature_columns=feature_columns,
+                feature_columns=available_feature_cols,
                 grid_size=28,
                 normalize=True
             )

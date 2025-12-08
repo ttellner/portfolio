@@ -360,7 +360,7 @@ def prepare_scoring_data(df, woe_mappings, vars_to_bin):
 
 
 def convert_to_image_grid(df, feature_columns=None, grid_size=28, 
-                          normalize=True, fill_method='zero'):
+                          normalize=True, fill_method='zero', exclude_columns=None):
     """
     Convert tabular data to 28x28 image grid format for CNN.
     
@@ -376,6 +376,8 @@ def convert_to_image_grid(df, feature_columns=None, grid_size=28,
         Whether to normalize features to [0, 1] range (default: True)
     fill_method : str
         Method to fill grid if features < grid_size^2: 'zero', 'mean', 'repeat'
+    exclude_columns : list, optional
+        List of column names to exclude from features (e.g., target column)
     
     Returns:
     --------
@@ -387,11 +389,17 @@ def convert_to_image_grid(df, feature_columns=None, grid_size=28,
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         feature_columns = numeric_cols
     
-    # Verify all feature columns exist in dataframe
-    missing_cols = [col for col in feature_columns if col not in df.columns]
-    if missing_cols:
+    # Exclude specified columns (e.g., target column)
+    if exclude_columns:
+        feature_columns = [col for col in feature_columns if col not in exclude_columns]
+    
+    # Filter to only columns that exist in dataframe
+    feature_columns = [col for col in feature_columns if col in df.columns]
+    
+    if len(feature_columns) == 0:
         raise ValueError(
-            f"Feature columns not found in dataframe: {missing_cols}"
+            "No valid feature columns found in dataframe after filtering. "
+            f"Available columns: {list(df.columns)[:20]}"
         )
     
     # Extract features
@@ -488,7 +496,8 @@ def prepare_cnn_data(df, feature_columns=None, target='default_12m',
         cleaned_df, 
         feature_columns=feature_columns,
         grid_size=grid_size,
-        normalize=normalize
+        normalize=normalize,
+        exclude_columns=[target]  # Explicitly exclude target column
     )
     
     # Extract target
