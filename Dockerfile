@@ -54,17 +54,35 @@ RUN pip3 install --no-cache-dir \
     scipy
 
 # Install R packages commonly used in data science
-# Install CRAN packages (including Seurat)
-# Note: Seurat is a large package and will significantly increase build time (10-15 minutes)
-# If you don't need Seurat, remove it from the list below
+# Install basic CRAN packages first
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('rmarkdown', 'knitr', 'ggplot2', 'dplyr', 'tidyr', 'readr', 'readxl', 'jsonlite', 'patchwork', 'Seurat'), \
-    dependencies=TRUE, quiet=TRUE)" || echo "Some CRAN packages may have failed to install, but continuing..."
+    install.packages(c('rmarkdown', 'knitr', 'ggplot2', 'dplyr', 'tidyr', 'readr', 'readxl', 'jsonlite', 'patchwork'), \
+    dependencies=TRUE, quiet=TRUE)" || echo "Basic R packages installation had issues, but continuing..."
+
+# Install Seurat separately with better error handling
+# Note: Seurat is a large package and will significantly increase build time (10-15 minutes)
+# If build fails here, try Dockerfile.simple first (without Seurat)
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    tryCatch({ \
+        install.packages('Seurat', dependencies=TRUE, quiet=TRUE); \
+        cat('Seurat installed successfully\n'); \
+    }, error = function(e) { \
+        cat('Seurat installation failed:', conditionMessage(e), '\n'); \
+        cat('Continuing without Seurat - bioinfoprojects R Markdown may not work\n'); \
+    })" || echo "Seurat installation failed, but continuing..."
 
 # Install Bioconductor packages (dependencies for some R packages)
-RUN Rscript -e "if (!requireNamespace('BiocManager', quietly = TRUE)) install.packages('BiocManager', repos='https://cran.rstudio.com/'); \
+# These are optional and won't break the build if they fail
+RUN Rscript -e "if (!requireNamespace('BiocManager', quietly = TRUE)) { \
+        install.packages('BiocManager', repos='https://cran.rstudio.com/', quiet=TRUE); \
+    }; \
     if (requireNamespace('BiocManager', quietly = TRUE)) { \
-    BiocManager::install(c('BiocGenerics', 'S4Vectors', 'IRanges', 'GenomicRanges'), ask=FALSE, update=FALSE, quiet=TRUE) \
+        tryCatch({ \
+            BiocManager::install(c('BiocGenerics', 'S4Vectors', 'IRanges', 'GenomicRanges'), ask=FALSE, update=FALSE, quiet=TRUE); \
+            cat('Bioconductor packages installed\n'); \
+        }, error = function(e) { \
+            cat('Bioconductor packages failed:', conditionMessage(e), '\n'); \
+        }); \
     }" || echo "Bioconductor packages installation skipped or failed"
 
 # Copy application code

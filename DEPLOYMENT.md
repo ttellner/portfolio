@@ -36,16 +36,18 @@ git push origin main
    - Click "Create service"
 
 2. **Configure Source**
-   - Select "Source: GitHub"
+   - Select "Source: GitHub" (this is a **Source code repository**, not a container registry)
    - Connect your GitHub account (if not already connected)
    - Select your repository: `portfolio`
    - Select branch: `main` (or your default branch)
+   - **Source directory**: `/` (root directory - leave as default)
    - Deployment trigger: "Automatic" (deploys on every push)
 
 3. **Configure Build**
-   - Build type: "Docker"
-   - Dockerfile path: `Dockerfile` (default)
-   - Docker build context: `.` (root directory)
+   - **Build type**: Select "Docker" (App Runner will auto-detect the Dockerfile)
+   - **Dockerfile path**: `Dockerfile` (default, should auto-populate)
+   - **Docker build context**: `.` (root directory, default)
+   - **Note**: You do NOT need `apprunner.yaml` for Docker builds - App Runner uses the Dockerfile directly
 
 4. **Configure Service**
    - Service name: `portfolio-streamlit` (or your preferred name)
@@ -127,6 +129,8 @@ You can add environment variables in AWS App Runner service configuration:
 
 1. **Check build logs** in AWS App Runner console
 2. **Common issues**:
+   - **"apprunner.yaml not found"**: This is OK! Docker builds don't need apprunner.yaml. Ensure Source directory is set to `/` (root).
+   - **"Runtime version not supported"**: This happens if apprunner.yaml exists with invalid config. Delete apprunner.yaml - it's not needed for Docker.
    - R package installation failures (non-critical, app may still work)
    - Python package conflicts (check `requirements.txt`)
    - Memory issues during build (increase App Runner instance size)

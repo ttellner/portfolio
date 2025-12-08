@@ -31,8 +31,9 @@ Thumbs.db
 .gitignore
 
 # Docker
-Dockerfile
+# Note: Don't exclude Dockerfile - it's needed for the build!
 .dockerignore
+Dockerfile.simple
 
 # Documentation
 README.md
