@@ -48,6 +48,9 @@ if "project" in query_params:
         if spec and spec.loader:
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
+            # Call main() if it exists (for Streamlit apps loaded via importlib)
+            if hasattr(module, 'main'):
+                module.main()
             st.stop()  # stop rendering this page and show the project
         else:
             st.error(f"Could not load: {project_path}")

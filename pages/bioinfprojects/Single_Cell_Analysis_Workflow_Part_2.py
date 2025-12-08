@@ -117,7 +117,7 @@ def display_cell(cell, cell_num, cell_index):
                             st.markdown(f"**Output {i+1}: HTML**")
                             # For very long HTML, show in expandable
                             if len(content) > 50000:
-                                with st.expander("View HTML Output", key=f"{unique_key}_html_exp"):
+                                with st.expander("View HTML Output"):
                                     st.components.v1.html(content, height=600, scrolling=True)
                             else:
                                 st.components.v1.html(content, height=400, scrolling=True)
@@ -131,7 +131,7 @@ def display_cell(cell, cell_num, cell_index):
                             # Truncate very long outputs
                             if len(content) > 5000:
                                 st.text(content[:5000] + f"\n\n... (truncated, {len(content)} total characters)")
-                                with st.expander("View full output", key=f"{unique_key}_full_exp"):
+                                with st.expander("View full output"):
                                     st.text_area("Full output", content, height=400, key=f"{unique_key}_full")
                             else:
                                 st.text_area("", content, height=min(200, len(content.split('\n')) * 20), key=f"{unique_key}_text", label_visibility="collapsed")
