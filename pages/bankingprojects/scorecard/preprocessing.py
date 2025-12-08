@@ -387,6 +387,13 @@ def convert_to_image_grid(df, feature_columns=None, grid_size=28,
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         feature_columns = numeric_cols
     
+    # Verify all feature columns exist in dataframe
+    missing_cols = [col for col in feature_columns if col not in df.columns]
+    if missing_cols:
+        raise ValueError(
+            f"Feature columns not found in dataframe: {missing_cols}"
+        )
+    
     # Extract features
     X = df[feature_columns].fillna(0).values
     
@@ -459,7 +466,24 @@ def prepare_cnn_data(df, feature_columns=None, target='default_12m',
     # Clean data first
     cleaned_df = clean_data(df)
     
-    # Convert to image grid
+    # Verify target column exists
+    if target not in cleaned_df.columns:
+        available_cols = list(cleaned_df.columns)
+        raise ValueError(
+            f"Target variable '{target}' not found in dataframe columns. "
+            f"Available columns: {available_cols[:10]}{'...' if len(available_cols) > 10 else ''}"
+        )
+    
+    # Ensure target is excluded from feature_columns if it's there
+    if feature_columns is not None:
+        feature_columns = [col for col in feature_columns if col != target]
+        if len(feature_columns) == 0:
+            raise ValueError(
+                "No feature columns available after excluding target. "
+                "Please ensure feature_columns contains columns other than the target."
+            )
+    
+    # Convert to image grid (this should not include target)
     X_images = convert_to_image_grid(
         cleaned_df, 
         feature_columns=feature_columns,
@@ -468,13 +492,16 @@ def prepare_cnn_data(df, feature_columns=None, target='default_12m',
     )
     
     # Extract target
-    if target in cleaned_df.columns:
-        y = cleaned_df[target].values
-        # Ensure y is 1D for CNN (flatten if needed)
-        if y.ndim > 1:
-            y = y.flatten()
-    else:
-        y = None
+    y = cleaned_df[target].values
+    # Ensure y is 1D for CNN (flatten if needed)
+    if y.ndim > 1:
+        y = y.flatten()
+    
+    # Verify y has the same length as X_images
+    if len(y) != len(X_images):
+        raise ValueError(
+            f"Target length ({len(y)}) does not match image array length ({len(X_images)})"
+        )
     
     return X_images, y
 

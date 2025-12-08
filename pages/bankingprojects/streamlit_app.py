@@ -440,12 +440,28 @@ def run_scorecard_pipeline_streamlit(
     
     status_text.text("Preprocessing training data...")
     
+    # Verify target column exists in training data
+    if target not in training_data.columns:
+        available_cols = list(training_data.columns)
+        raise ValueError(
+            f"Target variable '{target}' not found in training data columns. "
+            f"Available columns: {available_cols[:20]}{'...' if len(available_cols) > 20 else ''}"
+        )
+    
     if model_type == 'cnn':
         leftmost_col = training_data.columns[0]
         feature_columns = [
             col for col in training_data.select_dtypes(include=[np.number]).columns
             if col != target and col != leftmost_col
         ]
+        
+        # Ensure we have feature columns
+        if len(feature_columns) == 0:
+            raise ValueError(
+                f"No feature columns available for CNN model. "
+                f"Please ensure training data has numeric columns other than target '{target}'."
+            )
+        
         X_train_images, y_train = prepare_cnn_data(
             training_data,
             feature_columns=feature_columns,
