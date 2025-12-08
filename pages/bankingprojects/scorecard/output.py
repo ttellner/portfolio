@@ -294,9 +294,41 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
         if scoring == 'roc_auc':
             def score_func(model, X, y):
                 y_pred_proba = model.predict_proba(X)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X)
-                # For binary classification, roc_auc_score doesn't need multi_class parameter
-                # Ensure y is binary (0/1) and predictions are probabilities
-                return roc_auc_score(y, y_pred_proba)
+                # For binary classification, ensure y and predictions are properly formatted
+                # Convert y to numpy array and ensure it's binary (0/1)
+                y_array = np.asarray(y).flatten()
+                y_pred_array = np.asarray(y_pred_proba).flatten()
+                
+                # Verify binary classification
+                unique_y = np.unique(y_array)
+                if len(unique_y) > 2:
+                    raise ValueError(f"Expected binary classification but found {len(unique_y)} classes: {unique_y}")
+                
+                # Ensure y is 0/1 (not other values like -1/1)
+                if not np.all(np.isin(unique_y, [0, 1])):
+                    # Map to 0/1 if needed
+                    y_mapped = np.zeros_like(y_array)
+                    y_mapped[y_array == unique_y[0]] = 0
+                    y_mapped[y_array == unique_y[1]] = 1
+                    y_array = y_mapped
+                
+                # Call roc_auc_score with properly formatted arrays
+                try:
+                    return roc_auc_score(y_array, y_pred_array)
+                except ValueError as e:
+                    # If still getting multi_class error, it might be a sklearn version issue
+                    # Try to work around it
+                    error_msg = str(e).lower()
+                    if 'multi_class' in error_msg:
+                        # Some sklearn versions require explicit handling
+                        # Calculate AUC manually using trapezoidal rule
+                        from sklearn.metrics import roc_curve
+                        fpr, tpr, _ = roc_curve(y_array, y_pred_array)
+                        # Calculate AUC using numpy's trapezoidal integration
+                        auc = np.trapz(tpr, fpr)
+                        return auc
+                    else:
+                        raise
         elif scoring == 'accuracy':
             def score_func(model, X, y):
                 y_pred = model.predict(X)
@@ -305,11 +337,15 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
             score_func = scoring
         
         # Use sklearn's permutation_importance if available
-        # Note: For CNN models, we skip sklearn's permutation_importance and go straight to manual
-        # because sklearn expects 2D arrays but CNN needs image conversion
-        if is_cnn:
-            # Skip sklearn permutation_importance for CNN, go directly to manual calculation
-            print(f"  CNN model detected - using manual permutation calculation")
+        # Note: For CNN models and roc_auc scoring, we skip sklearn's permutation_importance
+        # because sklearn expects 2D arrays but CNN needs image conversion, and roc_auc
+        # can have multi_class parameter issues with sklearn's internal handling
+        if is_cnn or scoring == 'roc_auc':
+            # Skip sklearn permutation_importance for CNN or roc_auc, go directly to manual calculation
+            if is_cnn:
+                print(f"  CNN model detected - using manual permutation calculation")
+            else:
+                print(f"  Using manual permutation calculation for roc_auc scoring (avoids multi_class issues)")
             use_sklearn_perm = False
         else:
             use_sklearn_perm = True
@@ -413,7 +449,27 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
             # Calculate baseline
             X_baseline = prepare_for_prediction(X_df if is_cnn else X_array, feature_names if is_cnn else None)
             baseline_pred = model.predict_proba(X_baseline)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X_baseline)
-            baseline_score = score_func(model, X_baseline, y) if callable(score_func) else roc_auc_score(y, baseline_pred)
+            
+            # Calculate baseline score - ensure binary classification is handled correctly
+            try:
+                if callable(score_func):
+                    baseline_score = score_func(model, X_baseline, y)
+                elif scoring == 'roc_auc':
+                    # Explicitly handle binary classification for roc_auc
+                    baseline_score = roc_auc_score(y, baseline_pred)
+                else:
+                    baseline_score = roc_auc_score(y, baseline_pred)
+            except Exception as e:
+                # If there's an error with roc_auc, try with explicit binary handling
+                if 'multi_class' in str(e).lower():
+                    # Ensure y is binary and use roc_auc_score directly
+                    unique_y = np.unique(y)
+                    if len(unique_y) == 2:
+                        baseline_score = roc_auc_score(y, baseline_pred)
+                    else:
+                        raise ValueError(f"Expected binary classification but found {len(unique_y)} classes: {unique_y}")
+                else:
+                    raise
             
             print(f"  Baseline {scoring}: {baseline_score:.4f}")
             
@@ -442,7 +498,27 @@ def analyze_feature_impact(model, X, y=None, feature_names=None,
                     
                     # Predict with permuted feature
                     permuted_pred = model.predict_proba(X_permuted)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X_permuted)
-                    permuted_score = score_func(model, X_permuted, y) if callable(score_func) else roc_auc_score(y, permuted_pred)
+                    
+                    # Calculate permuted score - handle binary classification explicitly
+                    try:
+                        if callable(score_func):
+                            permuted_score = score_func(model, X_permuted, y)
+                        elif scoring == 'roc_auc':
+                            # Explicitly handle binary classification for roc_auc
+                            permuted_score = roc_auc_score(y, permuted_pred)
+                        else:
+                            permuted_score = roc_auc_score(y, permuted_pred)
+                    except Exception as e:
+                        # If there's an error with roc_auc, try with explicit binary handling
+                        if 'multi_class' in str(e).lower():
+                            # Ensure y is binary and use roc_auc_score directly
+                            unique_y = np.unique(y)
+                            if len(unique_y) == 2:
+                                permuted_score = roc_auc_score(y, permuted_pred)
+                            else:
+                                raise ValueError(f"Expected binary classification but found {len(unique_y)} classes: {unique_y}")
+                        else:
+                            raise
                     
                     # Importance = drop in score (higher drop = more important)
                     scores.append(baseline_score - permuted_score)
