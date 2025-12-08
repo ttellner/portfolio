@@ -555,6 +555,15 @@ def run_scorecard_pipeline_streamlit(
             cleaned_df, model, vars_to_bin=[], 
             feature_columns=feature_columns
         )
+        # Ensure target column is preserved for CNN models
+        # score_data should preserve all columns, but verify and add if missing
+        if isinstance(df_scored_train, pd.DataFrame):
+            if target not in df_scored_train.columns and target in cleaned_df.columns:
+                # Ensure lengths match
+                if len(df_scored_train) == len(cleaned_df):
+                    df_scored_train[target] = cleaned_df[target].values
+                else:
+                    st.warning(f"Length mismatch: scored data ({len(df_scored_train)}) vs original ({len(cleaned_df)})")
     else:
         df_scored_train = score_data(
             df_woe_train, model, vars_to_bin, use_woe=use_woe

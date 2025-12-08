@@ -540,16 +540,26 @@ def summarize_scores(scored_df, target_col=None):
     }
     
     # Add performance metrics if target is available
-    if target_col and target_col in scored_df.columns:
-        summary['performance'] = {
-            'default_rate': scored_df[target_col].mean(),
-            'default_rate_by_risk_band': (
-                scored_df.groupby('risk_band')[target_col].mean().to_dict()
-            ),
-            'default_rate_by_decision': (
-                scored_df.groupby('decision')[target_col].mean().to_dict()
-            )
-        }
+    if target_col:
+        if target_col not in scored_df.columns:
+            # Target column not found - this can happen with CNN models if target wasn't preserved
+            # Return summary without performance metrics
+            return summary
+        
+        try:
+            summary['performance'] = {
+                'default_rate': scored_df[target_col].mean(),
+                'default_rate_by_risk_band': (
+                    scored_df.groupby('risk_band')[target_col].mean().to_dict()
+                ),
+                'default_rate_by_decision': (
+                    scored_df.groupby('decision')[target_col].mean().to_dict()
+                )
+            }
+        except KeyError as e:
+            # If there's a KeyError accessing the target column, skip performance metrics
+            # This shouldn't happen if the check above worked, but handle it gracefully
+            return summary
         
         # Calculate classification metrics if target is binary
         if scored_df[target_col].nunique() == 2:

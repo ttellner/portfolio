@@ -380,6 +380,8 @@ def score_data(df_woe, model, vars_to_bin, feature_columns=None, use_woe=True):
         if isinstance(df_woe, pd.DataFrame):
             df_scored = df_woe.copy()
             df_scored[prob_col_name] = prob_default
+            # Ensure all original columns are preserved (including target if it exists)
+            # This is important for downstream functions that need the target column
             return df_scored
         else:
             return prob_default
