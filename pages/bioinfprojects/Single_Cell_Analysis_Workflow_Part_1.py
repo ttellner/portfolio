@@ -13,13 +13,42 @@ st.set_page_config(layout="wide")
 st.markdown("## Single-Cell Analysis Workflow - R/Seurat Analysis")
 st.markdown("#### R/Seurat Data Ingestion, QC and Prep - Be patient! There's a lot to render below.")
 
-# Paths
-R_PATH = r"C:/Program Files/R/R-4.4.1/bin/x64/Rscript.exe"
-RMD_FILE = (
-    r"D:/Repos/portfolio/pages/bioinfprojects/"
-    r"Tellner_Thomas_Capstone_Project_Part1.Rmd"
-)
-WORK_DIR = r"D:/Repos/portfolio/pages/bioinfprojects"
+# Paths - use dynamic paths based on file location
+from pathlib import Path
+BASE_DIR = Path(__file__).parent
+RMD_FILE = BASE_DIR / "Tellner_Thomas_Capstone_Project_Part1.Rmd"
+WORK_DIR = BASE_DIR
+
+# Try to find R - check common locations
+R_PATH = None
+possible_r_paths = [
+    r"C:/Program Files/R/R-4.4.1/bin/x64/Rscript.exe",
+    r"C:/Program Files/R/R-4.3.3/bin/x64/Rscript.exe",
+    r"C:/Program Files/R/R-4.3.2/bin/x64/Rscript.exe",
+    "Rscript",  # Try system PATH
+    "/usr/bin/Rscript",  # Linux
+    "/usr/local/bin/Rscript",  # Linux alternative
+]
+
+for r_path in possible_r_paths:
+    try:
+        # Try to run R with --version to check if it exists
+        test_process = subprocess.Popen(
+            [r_path, "--version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            test_result = test_process.communicate(timeout=5)
+        except Exception:
+            test_process.kill()
+            test_process.wait()
+            continue
+        if test_process.returncode == 0 or (test_result[0] and len(test_result[0]) > 0):
+            R_PATH = r_path
+            break
+    except (FileNotFoundError, OSError):
+        continue
 
 # First, check if pandoc is available and try to find RStudio's pandoc
 check_pandoc_script = '''# Check if pandoc is available and find it
@@ -138,9 +167,9 @@ if (pandoc_available()) {
 '''
 
 # Create a temporary R script to render the RMD file
-# Convert Windows paths to R-friendly format (forward slashes)
-work_dir_r = WORK_DIR.replace("\\", "/")
-rmd_file_r = RMD_FILE.replace("\\", "/")
+# Convert paths to R-friendly format (forward slashes)
+work_dir_r = str(WORK_DIR).replace("\\", "/")
+rmd_file_r = str(RMD_FILE).replace("\\", "/")
 
 render_script = f'''# Set working directory
 setwd("{work_dir_r}")
@@ -269,21 +298,61 @@ tryCatch({{
 }})
 '''
 
-# Write the render script to a temporary file
-with tempfile.NamedTemporaryFile(
-    mode='w', suffix='.R', delete=False, encoding='utf-8'
-) as tmp_script:
-    tmp_script.write(render_script)
-    tmp_script_path = tmp_script.name
+# Check if R is available
+if not R_PATH:
+    st.error("**R is not available**")
+    st.markdown("""
+    This project requires R and R Markdown to render the analysis.
+    
+    **Note:** R is not available on Streamlit Community Cloud. This project is designed
+    to run locally on a machine with R and RStudio installed.
+    
+    ### To run this project locally:
+    
+    1. **Install R**: https://cran.r-project.org/
+    2. **Install RStudio**: https://www.rstudio.com/products/rstudio/download/
+    3. **Install required R packages**:
+       ```r
+       install.packages(c("rmarkdown", "Seurat", "dplyr", "ggplot2"))
+       ```
+    4. **Run Streamlit locally**:
+       ```bash
+       streamlit run pages/bioinfprojects.py
+       ```
+    
+    ### Alternative: View the pre-rendered HTML
+    
+    If the HTML file has been pre-rendered, you can view it directly.
+    """)
+    
+    # Try to display pre-rendered HTML if it exists
+    html_file = BASE_DIR / "Tellner_Thomas_Capstone_Project_Part1.html"
+    if html_file.exists():
+        st.info("Found pre-rendered HTML file. Displaying it below:")
+        with open(html_file, 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        st.components.v1.html(html_content, height=1200, scrolling=True)
+    else:
+        st.warning("No pre-rendered HTML file found. Please run this project locally with R installed.")
+    
+    st.stop()
 
+# Write the render script to a temporary file
+tmp_script_path = None
 try:
+    with tempfile.NamedTemporaryFile(
+        mode='w', suffix='.R', delete=False, encoding='utf-8'
+    ) as tmp_script:
+        tmp_script.write(render_script)
+        tmp_script_path = tmp_script.name
+
     # First check for pandoc
     check_process = subprocess.Popen(
         [R_PATH, "-e", check_pandoc_script],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        cwd=WORK_DIR
+        cwd=str(WORK_DIR)
     )
     check_result = check_process.communicate()
     
@@ -368,7 +437,7 @@ try:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        cwd=WORK_DIR
+        cwd=str(WORK_DIR)
     )
     result = process.communicate()
     
@@ -415,9 +484,7 @@ try:
     
     # If not found in stdout, try default location
     if not html_output_path:
-        html_output_path = os.path.join(
-            WORK_DIR, "Tellner_Thomas_Capstone_Project_Part1.html"
-        )
+        html_output_path = str(WORK_DIR / "Tellner_Thomas_Capstone_Project_Part1.html")
     
     # Display the rendered HTML
     if os.path.exists(html_output_path):
@@ -430,7 +497,7 @@ try:
         st.error(f"HTML output file not found at: {html_output_path}")
         st.write("**Debug Info:**")
         st.write(f"Working Directory: {WORK_DIR}")
-        st.write(f"RMD File Exists: {os.path.exists(RMD_FILE)}")
+        st.write(f"RMD File Exists: {RMD_FILE.exists()}")
         st.write(f"Expected HTML Path: {html_output_path}")
         st.write(f"Return Code: {process.returncode}")
         
@@ -438,7 +505,38 @@ try:
             st.write("**Error Details:**")
             st.code(result[1])
 
+except FileNotFoundError:
+    st.error("**R executable not found**")
+    st.markdown("""
+    R is required to run this project but could not be found on the system.
+    
+    **To run this project locally:**
+    1. Install R from https://cran.r-project.org/
+    2. Install RStudio from https://www.rstudio.com/products/rstudio/download/
+    3. Make sure R is in your system PATH
+    """)
+    st.stop()
+except Exception as e:
+    st.error(f"**Error running R script:** {str(e)}")
+    st.markdown("""
+    An error occurred while trying to execute the R script.
+    
+    **Common issues:**
+    - R is not installed or not in PATH
+    - Required R packages are not installed
+    - Pandoc is not available
+    
+    **To troubleshoot:**
+    1. Check that R is installed and accessible
+    2. Install required packages: `install.packages(c("rmarkdown", "Seurat"))`
+    3. Install pandoc if needed
+    """)
+    st.exception(e)
+    st.stop()
 finally:
     # Clean up temporary script
-    if os.path.exists(tmp_script_path):
-        os.remove(tmp_script_path)
+    if tmp_script_path and os.path.exists(tmp_script_path):
+        try:
+            os.remove(tmp_script_path)
+        except Exception:
+            pass  # Ignore cleanup errors
