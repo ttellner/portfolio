@@ -10,12 +10,13 @@ import matplotlib.pyplot as plt
 import io
 import os
 import sys
+from pathlib import Path
 
 # Add the directory containing this file to Python path for imports
 # This ensures scorecard module can be found when loaded via importlib
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+current_dir = Path(__file__).parent.absolute()
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
 
 from scorecard.preprocessing import (
     prepare_training_data,
@@ -41,9 +42,9 @@ from scorecard.output import (
     analyze_feature_impact
 )
 
-# Default data file paths
-DEFAULT_TRAINING_FILE = "data/Application_Scorecard_Full_Table__25_Vars_.csv"
-DEFAULT_NEW_APPLICANT_FILE = "data/New_Applicant_Dataset__500_Records_.csv"
+# Default data file paths - use absolute paths based on file location
+DEFAULT_TRAINING_FILE = str(current_dir / "data" / "Application_Scorecard_Full_Table__25_Vars_.csv")
+DEFAULT_NEW_APPLICANT_FILE = str(current_dir / "data" / "New_Applicant_Dataset__500_Records_.csv")
 
 # Page configuration
 st.set_page_config(
