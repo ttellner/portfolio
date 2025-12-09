@@ -38,6 +38,32 @@ if (-not $dockerCli) {
     exit 1
 }
 
+# Check if Docker daemon is running
+Write-ColorOutput Yellow "Checking if Docker is running..."
+try {
+    $dockerVersion = docker version --format '{{.Server.Version}}' 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-ColorOutput Red "Error: Docker daemon is not running."
+        Write-Output ""
+        Write-Output "Please start Docker Desktop:"
+        Write-Output "1. Open Docker Desktop from the Start menu"
+        Write-Output "2. Wait for Docker to fully start (whale icon in system tray should be steady)"
+        Write-Output "3. Run this script again"
+        Write-Output ""
+        Write-Output "If Docker Desktop is already running, try:"
+        Write-Output "- Restart Docker Desktop"
+        Write-Output "- Run PowerShell as Administrator"
+        exit 1
+    }
+    Write-ColorOutput Green "OK - Docker is running (version: $dockerVersion)"
+} catch {
+    Write-ColorOutput Red "Error: Cannot connect to Docker daemon."
+    Write-Output ""
+    Write-Output "Please start Docker Desktop and try again."
+    exit 1
+}
+Write-Output ""
+
 # Check if AWS account ID is set
 if ([string]::IsNullOrEmpty($AWS_ACCOUNT_ID)) {
     Write-ColorOutput Red "Error: AWS_ACCOUNT_ID is not set. Please update the script with your AWS account ID."
