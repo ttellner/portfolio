@@ -33,12 +33,11 @@ docker buildx build `
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
-    Write-Host "✓ Successfully pushed image!" -ForegroundColor Green
+    Write-Host "OK - Successfully pushed image!" -ForegroundColor Green
     Write-Host "Image URI: ${ECR_REPOSITORY_URI}:latest" -ForegroundColor Cyan
 } else {
     Write-Host ""
-    Write-Host "✗ Push failed" -ForegroundColor Red
+    Write-Host "ERROR - Push failed" -ForegroundColor Red
     Write-Host "Try running: .\diagnose_push_issue.ps1" -ForegroundColor Yellow
     exit 1
 }
-
