@@ -25,8 +25,9 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symlinks for python and pip
-RUN ln -s /usr/bin/python3.11 /usr/bin/python && \
+# Create symlinks for python and pip (remove existing if they exist)
+RUN rm -f /usr/bin/python /usr/bin/python3 && \
+    ln -s /usr/bin/python3.11 /usr/bin/python && \
     ln -s /usr/bin/python3.11 /usr/bin/python3
 
 # Set working directory
