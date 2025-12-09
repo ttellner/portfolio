@@ -29,37 +29,56 @@ git commit -m "Add Dockerfile for AWS App Runner deployment"
 git push origin main
 ```
 
-### 2. Deploy to AWS App Runner
+### 2. Build and Push Docker Image to ECR
+
+**Option A: Using the automated script (Recommended)**
+
+1. **For Linux/Mac:**
+   ```bash
+   # Edit deploy_to_ecr.sh and set your AWS_ACCOUNT_ID
+   chmod +x deploy_to_ecr.sh
+   ./deploy_to_ecr.sh
+   ```
+
+2. **For Windows (PowerShell):**
+   ```powershell
+   # Edit deploy_to_ecr.ps1 and set your $AWS_ACCOUNT_ID
+   .\deploy_to_ecr.ps1
+   ```
+
+**Option B: Manual commands**
+
+```bash
+# 1. Authenticate Docker to ECR (replace with your AWS account ID and region)
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <your-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+# 2. Create ECR repository (one-time, if it doesn't exist)
+aws ecr create-repository --repository-name portfolio-streamlit --region us-east-1
+
+# 3. Build Docker image
+docker build -t portfolio-streamlit .
+
+# 4. Tag image for ECR
+docker tag portfolio-streamlit:latest <your-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/portfolio-streamlit:latest
+
+# 5. Push to ECR
+docker push <your-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/portfolio-streamlit:latest
+```
+
+### 3. Deploy to AWS App Runner
 
 1. **Navigate to AWS App Runner Console**
    - Go to AWS Console → App Runner
    - Click "Create service"
 
 2. **Configure Source**
-   - Select "Source: GitHub" (this is a **Source code repository**, not a container registry)
-   - Connect your GitHub account (if not already connected)
-   - Select your repository: `portfolio`
-   - Select branch: `main` (or your default branch)
-   - **Source directory**: `/` (root directory - leave as default)
-   - Deployment trigger: "Automatic" (deploys on every push)
+   - Select **"Source: Container registry"** (NOT GitHub)
+   - Choose **"Amazon ECR"**
+   - Select your repository: `portfolio-streamlit`
+   - Select image tag: `latest`
+   - Deployment trigger: "Automatic" (deploys when you push new images)
 
-3. **Configure Build Settings**
-
-   You have two options:
-
-   **Option A: Configure all settings here (Recommended for Docker)**
-   - **Runtime**: Select "Docker" or leave as auto-detected
-   - **Build Command**: Leave **EMPTY** (Docker handles the build automatically via the Dockerfile's RUN commands)
-   - **Start Command**: Leave **EMPTY** (App Runner will use the `CMD` from the Dockerfile)
-     - If the field is required and won't accept empty, enter: `streamlit run Home.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false`
-   - **Port**: `8501`
-
-   **Option B: Use a configuration file**
-   - Select "Use a configuration file"
-   - App Runner will read `apprunner.yaml` from your repository
-   - The `apprunner.yaml` file is already configured for Docker builds
-
-4. **Configure Service**
+3. **Configure Service**
    - Service name: `portfolio-streamlit` (or your preferred name)
    - Virtual CPU: 1 vCPU (minimum, increase if needed)
    - Memory: 2 GB (minimum, increase if needed)
@@ -68,11 +87,11 @@ git push origin main
      - `STREAMLIT_SERVER_PORT=8501`
      - `STREAMLIT_SERVER_ADDRESS=0.0.0.0`
 
-5. **Review and Create**
+4. **Review and Create**
    - Review all settings
    - Click "Create & deploy"
 
-### 3. Build Time
+### 4. Build Time
 
 **Important**: The first build will take 15-20 minutes because:
 - Installing R and R packages
@@ -81,11 +100,23 @@ git push origin main
 
 Subsequent builds will be faster due to Docker layer caching.
 
-### 4. Access Your Application
+### 5. Access Your Application
 
 Once deployment completes:
 - App Runner will provide a service URL (e.g., `https://xxxxx.us-east-1.awsapprunner.com`)
 - Your Streamlit app will be accessible at this URL
+
+## Updating Your Deployment
+
+When you make changes to your code:
+
+1. **Build and push new image to ECR:**
+   ```bash
+   # Use the deployment script or manual commands from Step 2
+   ./deploy_to_ecr.sh  # or deploy_to_ecr.ps1 on Windows
+   ```
+
+2. **App Runner will automatically detect the new image** (if automatic deployment is enabled) and redeploy your service.
 
 ## Local Testing
 
