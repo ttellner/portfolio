@@ -67,6 +67,8 @@ docker push <your-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/portfolio-stre
 
 ### 3. Deploy to AWS App Runner
 
+**Important**: You MUST complete Step 2 (build and push to ECR) BEFORE creating the App Runner service. The ECR repository and image must exist first.
+
 1. **Navigate to AWS App Runner Console**
    - Go to AWS Console → App Runner
    - Click "Create service"
@@ -74,9 +76,13 @@ docker push <your-aws-account-id>.dkr.ecr.us-east-1.amazonaws.com/portfolio-stre
 2. **Configure Source**
    - Select **"Source: Container registry"** (NOT GitHub)
    - Choose **"Amazon ECR"**
-   - Select your repository: `portfolio-streamlit`
-   - Select image tag: `latest`
-   - Deployment trigger: "Automatic" (deploys when you push new images)
+   - **Container image URI**: You have two options:
+     - **Option A (Browse)**: Click "Browse" and select `portfolio-streamlit` from the list (only appears after Step 2 is complete)
+     - **Option B (Type)**: Enter the full URI: `083738448444.dkr.ecr.us-east-1.amazonaws.com/portfolio-streamlit:latest`
+       - Replace `083738448444` with your AWS account ID if different
+       - Replace `us-east-1` with your region if different
+   - **Image tag**: `latest` (or leave blank if included in URI)
+   - **Deployment trigger**: "Automatic" (deploys when you push new images)
 
 3. **Configure Service**
    - Service name: `portfolio-streamlit` (or your preferred name)
