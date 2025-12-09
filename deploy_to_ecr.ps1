@@ -131,14 +131,50 @@ docker tag "${ECR_REPOSITORY_NAME}:latest" "${ECR_REPOSITORY_URI}:latest"
 Write-ColorOutput Green "OK - Image tagged"
 Write-Output ""
 
-# Step 5: Push to ECR
-Write-ColorOutput Yellow "Step 5: Pushing image to ECR..."
-docker push "${ECR_REPOSITORY_URI}:latest"
-if ($LASTEXITCODE -ne 0) {
-    Write-ColorOutput Red "Error: Failed to push image to ECR."
-    exit 1
+# Step 5: Check image size
+Write-ColorOutput Yellow "Step 5: Checking image size..."
+$imageSize = docker images "${ECR_REPOSITORY_NAME}:latest" --format "{{.Size}}"
+Write-Output "Image size: $imageSize"
+Write-Output "Note: Large images (>2GB) may take longer to push and may timeout."
+Write-Output ""
+
+# Step 6: Push to ECR (with retry logic)
+Write-ColorOutput Yellow "Step 6: Pushing image to ECR..."
+Write-Output "This may take several minutes for large images..."
+Write-Output ""
+
+$maxRetries = 3
+$retryCount = 0
+$pushSuccess = $false
+
+while ($retryCount -lt $maxRetries -and -not $pushSuccess) {
+    if ($retryCount -gt 0) {
+        Write-Output "Retry attempt $retryCount of $maxRetries..."
+        Start-Sleep -Seconds 5
+    }
+    
+    docker push "${ECR_REPOSITORY_URI}:latest"
+    
+    if ($LASTEXITCODE -eq 0) {
+        $pushSuccess = $true
+        Write-ColorOutput Green "OK - Image pushed successfully"
+    } else {
+        $retryCount++
+        if ($retryCount -lt $maxRetries) {
+            Write-ColorOutput Yellow "Push failed, retrying in 5 seconds..."
+        } else {
+            Write-ColorOutput Red "Error: Failed to push image to ECR after $maxRetries attempts."
+            Write-Output ""
+            Write-Output "Troubleshooting steps:"
+            Write-Output "1. Check your internet connection"
+            Write-Output "2. Verify AWS credentials: aws sts get-caller-identity"
+            Write-Output "3. Check ECR repository permissions"
+            Write-Output "4. Try pushing manually: docker push ${ECR_REPOSITORY_URI}:latest"
+            Write-Output "5. If image is very large (>5GB), consider using Docker buildx or optimizing the image"
+            exit 1
+        }
+    }
 }
-Write-ColorOutput Green "OK - Image pushed successfully"
 Write-Output ""
 
 Write-ColorOutput Green "=========================================="
@@ -149,9 +185,9 @@ Write-Output "1. Go to AWS App Runner Console"
 Write-Output "2. Create a new service"
 Write-Output "3. Select Source: Container registry"
 Write-Output "4. Choose Amazon ECR"
-Write-Output "5. Select repository: $ECR_REPOSITORY_NAME"
-Write-Output "6. Select image tag: latest"
-Write-Output "7. Set port: 8501"
-Write-Output "8. Create and deploy"
+Write-Output "5. Enter Container image URI: ${ECR_REPOSITORY_URI}:latest"
+Write-Output "   (Or browse and select: $ECR_REPOSITORY_NAME)"
+Write-Output "6. Set port: 8501"
+Write-Output "7. Create and deploy"
 Write-Output ""
 Write-Output "ECR Repository URI: ${ECR_REPOSITORY_URI}:latest"
