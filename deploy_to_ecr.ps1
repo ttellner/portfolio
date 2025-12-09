@@ -2,7 +2,7 @@
 
 # Configuration - UPDATE THESE VALUES
 $AWS_REGION = "us-east-1"  # Change to your preferred region
-$AWS_ACCOUNT_ID = "0837-3844-8444"  # Your AWS account ID (12 digits)
+$AWS_ACCOUNT_ID = "083738448444"  # Your AWS account ID (12 digits, no dashes)
 $ECR_REPOSITORY_NAME = "portfolio-streamlit"
 
 # Colors for output
@@ -15,10 +15,42 @@ function Write-ColorOutput($ForegroundColor) {
     $host.UI.RawUI.ForegroundColor = $fc
 }
 
+# Check if AWS CLI is installed
+$awsCli = Get-Command aws -ErrorAction SilentlyContinue
+if (-not $awsCli) {
+    Write-ColorOutput Red "Error: AWS CLI is not installed or not in PATH."
+    Write-Output ""
+    Write-Output "Please install AWS CLI:"
+    Write-Output "1. Download from: https://aws.amazon.com/cli/"
+    Write-Output "2. Or install via: winget install Amazon.AWSCLI"
+    Write-Output "3. After installation, restart PowerShell and try again"
+    exit 1
+}
+
+# Check if Docker is installed
+$dockerCli = Get-Command docker -ErrorAction SilentlyContinue
+if (-not $dockerCli) {
+    Write-ColorOutput Red "Error: Docker is not installed or not in PATH."
+    Write-Output ""
+    Write-Output "Please install Docker Desktop:"
+    Write-Output "1. Download from: https://www.docker.com/products/docker-desktop"
+    Write-Output "2. After installation, restart PowerShell and try again"
+    exit 1
+}
+
 # Check if AWS account ID is set
 if ([string]::IsNullOrEmpty($AWS_ACCOUNT_ID)) {
     Write-ColorOutput Red "Error: AWS_ACCOUNT_ID is not set. Please update the script with your AWS account ID."
     Write-Output "You can find your AWS account ID in the AWS Console (top right corner)."
+    Write-Output "Note: AWS account ID should be 12 digits without dashes (e.g., 083738448444)"
+    exit 1
+}
+
+# Validate AWS account ID format (should be 12 digits)
+if ($AWS_ACCOUNT_ID -notmatch '^\d{12}$') {
+    Write-ColorOutput Red "Error: AWS_ACCOUNT_ID must be exactly 12 digits without dashes or spaces."
+    Write-Output "Current value: $AWS_ACCOUNT_ID"
+    Write-Output "Expected format: 083738448444 (12 digits)"
     exit 1
 }
 
