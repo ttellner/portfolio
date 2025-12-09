@@ -33,12 +33,12 @@ Write-Output ""
 
 # Step 1: Authenticate Docker to ECR
 Write-ColorOutput Yellow "Step 1: Authenticating Docker to ECR..."
-$loginCommand = aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
 if ($LASTEXITCODE -ne 0) {
     Write-ColorOutput Red "Error: Failed to authenticate with ECR. Check your AWS credentials."
     exit 1
 }
-Write-ColorOutput Green "✓ Authenticated"
+Write-ColorOutput Green "OK - Authenticated"
 Write-Output ""
 
 # Step 2: Create ECR repository if it doesn't exist
@@ -51,9 +51,9 @@ if ($LASTEXITCODE -ne 0) {
         Write-ColorOutput Red "Error: Failed to create ECR repository."
         exit 1
     }
-    Write-ColorOutput Green "✓ Repository created"
+    Write-ColorOutput Green "OK - Repository created"
 } else {
-    Write-ColorOutput Green "✓ Repository exists"
+    Write-ColorOutput Green "OK - Repository exists"
 }
 Write-Output ""
 
@@ -64,13 +64,13 @@ if ($LASTEXITCODE -ne 0) {
     Write-ColorOutput Red "Error: Docker build failed."
     exit 1
 }
-Write-ColorOutput Green "✓ Image built successfully"
+Write-ColorOutput Green "OK - Image built successfully"
 Write-Output ""
 
 # Step 4: Tag image for ECR
 Write-ColorOutput Yellow "Step 4: Tagging image for ECR..."
 docker tag "${ECR_REPOSITORY_NAME}:latest" "${ECR_REPOSITORY_URI}:latest"
-Write-ColorOutput Green "✓ Image tagged"
+Write-ColorOutput Green "OK - Image tagged"
 Write-Output ""
 
 # Step 5: Push to ECR
@@ -80,7 +80,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-ColorOutput Red "Error: Failed to push image to ECR."
     exit 1
 }
-Write-ColorOutput Green "✓ Image pushed successfully"
+Write-ColorOutput Green "OK - Image pushed successfully"
 Write-Output ""
 
 Write-ColorOutput Green "=========================================="
@@ -97,4 +97,3 @@ Write-Output "7. Set port: 8501"
 Write-Output "8. Create and deploy"
 Write-Output ""
 Write-Output "ECR Repository URI: ${ECR_REPOSITORY_URI}:latest"
-
