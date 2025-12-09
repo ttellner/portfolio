@@ -2,7 +2,7 @@
 
 # Configuration - UPDATE THESE VALUES
 $AWS_REGION = "us-east-1"  # Change to your preferred region
-$AWS_ACCOUNT_ID = "083738448444"  # Your AWS account ID (12 digits)
+$AWS_ACCOUNT_ID = "0837-3844-8444"  # Your AWS account ID (12 digits)
 $ECR_REPOSITORY_NAME = "portfolio-streamlit"
 
 # Colors for output
