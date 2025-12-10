@@ -45,7 +45,7 @@
 
 - **Build command**: Leave empty (Dockerfile handles it)
 - **Start command**: Leave empty (uses Dockerfile CMD)
-- **Port**: `8501` (Streamlit default port)
+- **Port**: `8080` (nginx proxy port)
 
 Click **"Next"**
 
@@ -61,7 +61,7 @@ Click **"Next"**
    - Select **2 GB** (minimum, sufficient for most apps)
    - Increase if you have large models/data
 
-4. **Port**: `8501` (must match your Dockerfile EXPOSE)
+4. **Port**: `8080` (must match your Dockerfile EXPOSE - nginx runs on 8080)
 
 5. **Environment variables** (optional):
    - Click "Add environment variable"
@@ -128,7 +128,7 @@ Once status is **"Running"**:
 | **Service name** | `portfolio-streamlit` |
 | **CPU** | 1 vCPU (minimum) |
 | **Memory** | 2 GB (minimum) |
-| **Port** | `8501` |
+| **Port** | `8080` |
 
 ## Troubleshooting
 
@@ -156,15 +156,23 @@ If you see this when browsing:
 
 ### Health Check Failing
 
+**IMPORTANT:** App Runner needs **HTTP health checks**, not TCP!
+
+1. Go to **App Runner → Your Service → Configuration → Health check**
+2. **Protocol:** Must be **HTTP** (not TCP)
+3. **Path:** `/_stcore/health` or `/`
+4. **Port:** `8080`
+
 Your Dockerfile has:
 ```dockerfile
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl --fail http://localhost:8501/_stcore/health || exit 1
+    CMD curl --fail http://localhost:8080/_stcore/health || exit 1
 ```
 
-This should work, but if health checks fail:
+If health checks fail:
+- Verify protocol is **HTTP** (not TCP) in App Runner config
 - Check service logs
-- Verify Streamlit is running
+- Verify nginx and Streamlit are running
 - Increase `start-period` if app takes longer to start
 
 ## After Deployment
