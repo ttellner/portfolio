@@ -71,6 +71,7 @@ RUN mkdir -p .streamlit
 EXPOSE 8080
 
 # Health check for AWS App Runner (through nginx)
+# App Runner uses HTTP health checks, not TCP
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl --fail http://localhost:8080/_stcore/health || exit 1
 
