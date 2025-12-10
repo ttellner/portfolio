@@ -56,6 +56,9 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
 # Copy application code
 COPY . .
 
+# Ensure .streamlit directory exists (create if it doesn't)
+RUN mkdir -p .streamlit
+
 # Expose Streamlit port
 EXPOSE 8501
 
@@ -63,6 +66,6 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
-# Run Streamlit
-CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=false", "--server.enableXsrfProtection=false"]
+# Run Streamlit with WebSocket-friendly settings for App Runner
+CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=true", "--server.enableXsrfProtection=false", "--server.allowRunOnSave=false", "--server.fileWatcherType=none"]
 

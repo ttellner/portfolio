@@ -1,0 +1,12 @@
+[server]
+port = 8501
+address = "0.0.0.0"
+headless = true
+enableCORS = true
+enableXsrfProtection = false
+allowRunOnSave = false
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
+
