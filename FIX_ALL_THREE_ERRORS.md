@@ -18,39 +18,44 @@
 **This is the most critical fix!**
 
 1. Go to **App Runner → Your Service → Edit**
-2. Scroll to **Security** section
-3. Under **Access role**, you'll see your current role
-4. **Select: "Create new service role"** (or choose this option)
-5. App Runner will automatically:
-   - Create a new role
-   - Grant it ECR read permissions
-   - Configure trust policy correctly
-6. **Save** (don't deploy yet)
+2. Scroll to **Deployment Settings** section (NOT Security)
+3. Under **Access role** (for ECR access), you'll see your current role
+4. **Select: "Create new service role"**
+5. **Name the role:** Use something like `AppRunner-ECR-AccessRole` or `portfolio-streamlit-ecr-role`
+   - App Runner will create this role automatically
+   - It will grant ECR read permissions
+   - It will configure trust policy correctly
+6. **Note:** The "Instance role" under Security is different - that's for AWS service access, not ECR
+7. **Save** (don't deploy yet)
 
 **Why this fixes errors #2 and #3:**
 - Error #2: Invalid Access Role → New role has correct trust policy
 - Error #3: Failed to copy image → New role has ECR permissions
 
+**Important:** Do NOT use the custom policy role (`apprunner-ecr-policy.json`) - that was for manual setup. Let App Runner create the role automatically.
+
 ### ✅ Fix 2: Health Check Configuration (Fixes error #1)
 
 1. Still in **App Runner → Your Service → Edit**
-2. Go to **Health check** section (or **Service** section)
-3. **Protocol:** Change from `TCP` to **`HTTP`** ⚠️ CRITICAL!
-4. **Path:** `/_stcore/health` (or just `/`)
-5. **Port:** `8080`
-6. **Save**
+2. Go to **Service Settings** section
+3. Find **Health check** configuration
+4. **Protocol:** Change from `TCP` to **`HTTP`** ⚠️ CRITICAL!
+5. **Path:** `/_stcore/health` (or just `/`)
+6. **Port:** `8080`
+7. **Save**
 
 **If you don't see Health check settings:**
-- Go to **Configuration → Service**
-- Look for **Health check path** field
+- Look in **Service Settings** section
+- Find **Health check path** field
 - Set to: `/_stcore/health`
-- Ensure **Port** is `8080`
+- Ensure **Port** is `8080` in the same section
 
 ### ✅ Fix 3: Verify Port Configuration
 
-1. In **App Runner → Your Service → Configuration → Service**
+1. In **App Runner → Your Service → Edit → Service Settings**
 2. **Port:** Must be **`8080`** (not 8501)
-3. **Save**
+3. This should be in the same section as Health check
+4. **Save**
 
 ### ✅ Fix 4: Deploy
 
@@ -62,12 +67,14 @@
 
 Before deploying, verify:
 
-- [ ] **Access role:** "Create new service role" selected (or new role created)
-- [ ] **Port:** `8080` (in Service configuration)
-- [ ] **Health check protocol:** `HTTP` (NOT TCP)
-- [ ] **Health check path:** `/_stcore/health` or `/`
-- [ ] **Health check port:** `8080`
+- [ ] **Access role (Deployment Settings):** "Create new service role" selected and named
+- [ ] **Port (Service Settings):** `8080` (not 8501)
+- [ ] **Health check protocol (Service Settings):** `HTTP` (NOT TCP)
+- [ ] **Health check path (Service Settings):** `/_stcore/health` or `/`
+- [ ] **Health check port (Service Settings):** `8080`
 - [ ] **Image exists in ECR:** Check ECR → portfolio-streamlit → latest tag
+
+**Note:** All Service Settings (port, health check) are in the same section.
 
 ## Why Each Fix Works
 
