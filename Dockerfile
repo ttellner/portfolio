@@ -8,7 +8,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
-# Install system dependencies
+# Install system dependencies (including nginx for WebSocket proxy)
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-dev \
@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     git \
     build-essential \
     pandoc \
+    nginx \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
@@ -56,17 +57,24 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
 # Copy application code
 COPY . .
 
+# Copy nginx configuration for WebSocket support
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy startup script
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Ensure .streamlit directory exists (create if it doesn't)
 RUN mkdir -p .streamlit
 
-# Expose Streamlit port
-EXPOSE 8501
+# Expose nginx port (App Runner will connect to this)
+EXPOSE 8080
 
-# Health check for AWS App Runner
+# Health check for AWS App Runner (through nginx)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl --fail http://localhost:8501/_stcore/health || exit 1
+    CMD curl --fail http://localhost:8080/_stcore/health || exit 1
 
-# Run Streamlit with WebSocket-friendly settings for App Runner
-# App Runner requires specific WebSocket configuration
-CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=true", "--server.enableXsrfProtection=false", "--server.allowRunOnSave=false", "--server.fileWatcherType=none", "--server.runOnSave=false"]
+# Start both Streamlit (in background) and nginx (foreground)
+# nginx will proxy WebSocket connections properly to handle App Runner's load balancer
+CMD ["/app/start.sh"]
 
