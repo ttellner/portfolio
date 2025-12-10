@@ -67,5 +67,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl --fail http://localhost:8501/_stcore/health || exit 1
 
 # Run Streamlit with WebSocket-friendly settings for App Runner
-CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=true", "--server.enableXsrfProtection=false", "--server.allowRunOnSave=false", "--server.fileWatcherType=none"]
+# App Runner requires specific WebSocket configuration
+CMD ["streamlit", "run", "Home.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true", "--server.enableCORS=true", "--server.enableXsrfProtection=false", "--server.allowRunOnSave=false", "--server.fileWatcherType=none", "--server.runOnSave=false"]
 
