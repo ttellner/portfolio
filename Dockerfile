@@ -50,9 +50,15 @@ RUN pip3 install --no-cache-dir \
     scipy
 
 # Install basic R packages (without Seurat for faster builds)
+# Install in smaller batches and skip optional dependencies to avoid timeout
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('rmarkdown', 'knitr', 'ggplot2', 'dplyr', 'tidyr', 'readr', 'jsonlite', 'patchwork'), \
-    dependencies=TRUE, quiet=TRUE)" || echo "R packages installation had some issues, but continuing..."
+    install.packages(c('jsonlite', 'readr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 1 had issues, continuing..." && \
+    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages(c('dplyr', 'tidyr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 2 had issues, continuing..." && \
+    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages(c('ggplot2', 'knitr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 3 had issues, continuing..." && \
+    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages(c('rmarkdown', 'patchwork'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 4 had issues, but continuing..."
 
 # Copy application code
 COPY . .
