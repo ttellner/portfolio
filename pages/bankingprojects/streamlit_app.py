@@ -449,6 +449,14 @@ def run_scorecard_pipeline_streamlit(
         Model parameters
     use_woe : bool
         Whether to use WOE transformation
+    use_smote : bool
+        Whether to use SMOTE
+    smote_k_neighbors : int
+        SMOTE k neighbors
+    
+    Returns:
+    --------
+    dict : Results dictionary
     """
     # Validate target column exists
     if target not in training_data.columns:
@@ -464,15 +472,6 @@ def run_scorecard_pipeline_streamlit(
             f"Filtering to only binary values (0 and 1) for WOE calculation."
         )
         training_data = training_data[training_data[target].isin([0, 1])].copy()
-    use_smote : bool
-        Whether to use SMOTE
-    smote_k_neighbors : int
-        SMOTE k neighbors
-    
-    Returns:
-    --------
-    dict : Results dictionary
-    """
     if model_params is None:
         model_params = {}
     
