@@ -17,6 +17,27 @@ st.markdown(
     nav[aria-label="Secondary"] { 
         display: none; 
     }
+    
+    /* Force white background for main content area - prevents dark mode issues */
+    .main .block-container {
+        background-color: #ffffff !important;
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Ensure main page background is white */
+    .stApp {
+        background-color: #f0f2f6 !important;  /* Light gray background */
+    }
+    
+    /* Force text colors in main content */
+    .main h1, .main h2, .main h3 {
+        color: #262730 !important;
+    }
+    
+    .main p, .main div {
+        color: #262730 !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -27,14 +48,15 @@ st.markdown("""
 <style>
 /* 🎨 Card container */
 .card {
-    border: 1px solid #e0e0e0;             /* Light border */
+    border: 1px solid #e0e0e0 !important;             /* Light border */
     border-radius: 15px;
-    background-color: #ffffff;
+    background-color: #ffffff !important;  /* Force white background - always visible */
     padding: 1rem;
     box-shadow: 0 4px 10px rgba(0,0,0,0.08); /* Soft shadow */
     transition: all 0.3s ease-in-out;
     text-align: center;                    /* Center image & text */
     margin-bottom: 1rem;
+    color: #262730 !important;  /* Default text color for card */
 }
 
 /* ✨ Hover effect */
@@ -56,6 +78,7 @@ st.markdown("""
     font-size: 1.1rem;
     font-weight: 600;
     margin-bottom: 0.25rem;
+    color: #262730 !important;  /* Dark text - always visible on white background */
 }
 
 /* 🔘 Button inside card */
@@ -72,7 +95,7 @@ st.markdown("""
 
 .card p {
     font-size: 0.9rem;
-    color: #555;
+    color: #555 !important;  /* Dark gray text - always visible on white background */
     margin-bottom: 0.75rem;
 }
 </style>

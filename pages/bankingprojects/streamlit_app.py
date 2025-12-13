@@ -140,6 +140,21 @@ def main():
                     st.session_state.original_training_data = training_data.copy()
                     st.session_state.training_data = training_data
                     st.session_state.using_uploaded_training = False  # Mark as default
+                    
+                    # Set default target column and excluded columns for default data
+                    if st.session_state.target_column is None or st.session_state.target_column not in training_data.columns:
+                        if 'delinq_12m' in training_data.columns:
+                            st.session_state.target_column = 'delinq_12m'
+                    
+                    if not st.session_state.columns_to_exclude or len(st.session_state.columns_to_exclude) == 0:
+                        default_exclude = []
+                        if 'cust_id' in training_data.columns:
+                            default_exclude.append('cust_id')
+                        if 'application_date' in training_data.columns:
+                            default_exclude.append('application_date')
+                        if default_exclude:
+                            st.session_state.columns_to_exclude = default_exclude
+                    
                     st.info(f"📁 Using default training data: {DEFAULT_TRAINING_FILE} ({len(training_data)} records)")
                 except Exception as e:
                     st.warning(f"Could not load default training file: {e}")
@@ -184,19 +199,41 @@ def main():
             all_columns = st.session_state.original_training_data.columns.tolist()
             
             # Target column selection
+            # Determine default index: prefer stored value, then 'delinq_12m' if using default data, else 0
+            default_target_index = 0
+            if st.session_state.target_column and st.session_state.target_column in all_columns:
+                default_target_index = all_columns.index(st.session_state.target_column)
+            elif not st.session_state.using_uploaded_training and 'delinq_12m' in all_columns:
+                # Use 'delinq_12m' as default when using default data
+                default_target_index = all_columns.index('delinq_12m')
+                st.session_state.target_column = 'delinq_12m'
+            
             target = st.selectbox(
                 "Select Target Column",
                 options=all_columns,
-                index=0 if st.session_state.target_column is None else all_columns.index(st.session_state.target_column) if st.session_state.target_column in all_columns else 0,
+                index=default_target_index,
                 help="Select the binary target variable column"
             )
             st.session_state.target_column = target
             
             # Columns to exclude
+            # Determine default excluded columns: prefer stored value, then defaults if using default data
+            default_excluded = st.session_state.columns_to_exclude if st.session_state.columns_to_exclude else []
+            if not st.session_state.using_uploaded_training and not default_excluded:
+                # Set defaults for default data: cust_id and application_date
+                default_excluded = []
+                if 'cust_id' in all_columns and 'cust_id' != target:
+                    default_excluded.append('cust_id')
+                if 'application_date' in all_columns and 'application_date' != target:
+                    default_excluded.append('application_date')
+                if default_excluded:
+                    st.session_state.columns_to_exclude = default_excluded
+                    default_excluded = st.session_state.columns_to_exclude
+            
             columns_to_exclude = st.multiselect(
                 "Select Columns to Exclude",
                 options=[col for col in all_columns if col != target],
-                default=st.session_state.columns_to_exclude if st.session_state.columns_to_exclude else [],
+                default=default_excluded,
                 help="Select columns to exclude from the model"
             )
             st.session_state.columns_to_exclude = columns_to_exclude
@@ -412,6 +449,21 @@ def run_scorecard_pipeline_streamlit(
         Model parameters
     use_woe : bool
         Whether to use WOE transformation
+    """
+    # Validate target column exists
+    if target not in training_data.columns:
+        raise ValueError(f"Target column '{target}' not found in training data")
+    
+    # Validate and clean target to be binary (0 and 1 only)
+    target_values = training_data[target].dropna().unique()
+    non_binary_values = [v for v in target_values if v not in [0, 1]]
+    if len(non_binary_values) > 0:
+        # Filter to only binary values (0 and 1) and warn user
+        st.warning(
+            f"Target column '{target}' contains non-binary values: {non_binary_values}. "
+            f"Filtering to only binary values (0 and 1) for WOE calculation."
+        )
+        training_data = training_data[training_data[target].isin([0, 1])].copy()
     use_smote : bool
         Whether to use SMOTE
     smote_k_neighbors : int
@@ -640,9 +692,19 @@ def run_scorecard_pipeline_streamlit(
         # Prepare feature matrix and labels for analysis
         if model_type == 'cnn':
             # For CNN, use original feature DataFrame
-            X_for_impact = cleaned_df[feature_columns].copy()
-            y_for_impact = cleaned_df[target].values
+            # Filter to only binary target values (0 and 1) for feature impact analysis
+            binary_mask = cleaned_df[target].isin([0, 1])
+            X_for_impact = cleaned_df.loc[binary_mask, feature_columns].copy()
+            y_for_impact = cleaned_df.loc[binary_mask, target].values
             feature_names_for_impact = feature_columns
+            
+            # Warn if non-binary values were filtered out
+            if not binary_mask.all():
+                non_binary_count = (~binary_mask).sum()
+                st.warning(
+                    f"Filtered out {non_binary_count} rows with non-binary target values "
+                    f"for feature impact analysis (CNN requires binary classification)."
+                )
         else:
             # For other models, use WOE features if available
             if use_woe:
@@ -669,7 +731,18 @@ def run_scorecard_pipeline_streamlit(
                                                if col != target and col != leftmost_col]
                     X_for_impact = cleaned_df[feature_names_for_impact].copy()
             
-            y_for_impact = cleaned_df[target].values
+            # Filter to only binary target values (0 and 1) for feature impact analysis
+            binary_mask = cleaned_df[target].isin([0, 1])
+            X_for_impact = X_for_impact.loc[binary_mask].copy()
+            y_for_impact = cleaned_df.loc[binary_mask, target].values
+            
+            # Warn if non-binary values were filtered out
+            if not binary_mask.all():
+                non_binary_count = (~binary_mask).sum()
+                st.warning(
+                    f"Filtered out {non_binary_count} rows with non-binary target values "
+                    f"for feature impact analysis (requires binary classification)."
+                )
         
         # Run feature impact analysis
         feature_impact_results = analyze_feature_impact(

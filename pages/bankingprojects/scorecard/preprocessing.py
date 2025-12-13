@@ -94,11 +94,17 @@ def calculate_woe_iv(df, var, target='default_12m', n_bins=6):
         fill_value=0
     )
     
+    # Ensure we only have binary target (0 and 1)
+    # Select only columns 0 and 1, or create them if they don't exist
     if 0 not in freq_table.columns:
         freq_table[0] = 0
     if 1 not in freq_table.columns:
-        freq_table[1] = 1
+        freq_table[1] = 0
     
+    # Select only the binary columns (0 and 1) and ignore any other columns
+    freq_table = freq_table[[0, 1]].copy()
+    
+    # Rename columns
     freq_table.columns = ['good', 'bad']
     
     # Calculate distributions
