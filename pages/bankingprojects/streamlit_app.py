@@ -706,6 +706,7 @@ def run_scorecard_pipeline_streamlit(
                 )
         else:
             # For other models, use WOE features if available
+            woe_vars = None
             if use_woe:
                 # Get WOE variable names
                 woe_vars = [f'{var}_woe' for var in vars_to_bin 
@@ -731,9 +732,43 @@ def run_scorecard_pipeline_streamlit(
                     X_for_impact = cleaned_df[feature_names_for_impact].copy()
             
             # Filter to only binary target values (0 and 1) for feature impact analysis
-            binary_mask = cleaned_df[target].isin([0, 1])
-            X_for_impact = X_for_impact.loc[binary_mask].copy()
-            y_for_impact = cleaned_df.loc[binary_mask, target].values
+            # Ensure binary_mask aligns with X_for_impact's index
+            try:
+                # Try to use index-based filtering first
+                if X_for_impact.index.equals(cleaned_df.index):
+                    # Same index - can use mask directly
+                    binary_mask = cleaned_df[target].isin([0, 1])
+                    X_for_impact = X_for_impact.loc[binary_mask].copy()
+                    y_for_impact = cleaned_df.loc[binary_mask, target].values
+                elif use_woe and woe_vars is not None and hasattr(df_woe_train, 'index') and X_for_impact.index.equals(df_woe_train.index):
+                    # X_for_impact comes from df_woe_train, get target from there
+                    if target in df_woe_train.columns:
+                        binary_mask = df_woe_train[target].isin([0, 1])
+                        X_for_impact = X_for_impact.loc[binary_mask].copy()
+                        y_for_impact = df_woe_train.loc[binary_mask, target].values
+                    else:
+                        # Target not in df_woe_train, use position-based indexing
+                        binary_mask = cleaned_df[target].isin([0, 1]).values
+                        # Align by position - take first len(binary_mask) rows
+                        min_len = min(len(X_for_impact), len(binary_mask))
+                        X_for_impact = X_for_impact.iloc[:min_len][binary_mask[:min_len]].copy()
+                        y_for_impact = cleaned_df[target].values[:min_len][binary_mask[:min_len]]
+                else:
+                    # Different indices - use position-based indexing
+                    # Reset indices to ensure alignment
+                    X_for_impact = X_for_impact.reset_index(drop=True)
+                    binary_mask = cleaned_df[target].isin([0, 1]).values
+                    # Align by position
+                    min_len = min(len(X_for_impact), len(binary_mask))
+                    X_for_impact = X_for_impact.iloc[binary_mask[:min_len]].copy()
+                    y_for_impact = cleaned_df[target].values[binary_mask[:min_len]]
+            except (IndexError, KeyError, ValueError) as e:
+                # Fallback: reset indices and use position-based filtering
+                X_for_impact = X_for_impact.reset_index(drop=True)
+                binary_mask = cleaned_df[target].isin([0, 1]).values
+                min_len = min(len(X_for_impact), len(binary_mask))
+                X_for_impact = X_for_impact.iloc[binary_mask[:min_len]].copy()
+                y_for_impact = cleaned_df[target].values[binary_mask[:min_len]]
             
             # Warn if non-binary values were filtered out
             if not binary_mask.all():
