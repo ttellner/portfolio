@@ -97,8 +97,18 @@ class ScorecardModel:
     
     def _create_cnn_model(self, **params):
         """Create CNN model for 28x28 image input."""
+        # Clear any existing TensorFlow graph/session to avoid name_scope issues
+        try:
+            import tensorflow as tf
+            # Clear default graph and reset name scope stack
+            tf.keras.backend.clear_session()
+        except:
+            pass
+        
         input_shape = (28, 28, 1)
         
+        # Create model - avoid using name_scope to prevent "pop from empty list" error
+        # Simply create Sequential model directly
         model = keras.Sequential([
             # First convolutional block
             layers.Conv2D(

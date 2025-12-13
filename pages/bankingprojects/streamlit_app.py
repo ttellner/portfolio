@@ -289,22 +289,11 @@ def main():
         
         st.markdown("---")
         
-        # Data transformation options
-        st.subheader("🔄 Data Transformation")
-        use_woe = st.radio(
-            "Data Transformation",
-            ["Use WOE (Weight of Evidence)", "Use Raw Numeric Data"],
-            index=0,
-            help="Choose between WOE transformation or raw numeric data"
-        )
-        use_woe = use_woe == "Use WOE (Weight of Evidence)"
-        
-        # SMOTE options
-        use_smote = st.checkbox("Apply SMOTE Oversampling", value=True, help="Balance the dataset using SMOTE")
-        if use_smote:
-            smote_k_neighbors = st.number_input("SMOTE K Neighbors", min_value=1, max_value=10, value=5, step=1)
-        else:
-            smote_k_neighbors = 5
+        # Data transformation is now hardcoded based on model type
+        # Logistic Regression uses WOE, all others use raw data
+        # SMOTE is not used for any model
+        use_smote = False
+        smote_k_neighbors = 5
         
         st.markdown("---")
         
@@ -398,6 +387,10 @@ def main():
         # Run pipeline
         try:
             with st.spinner("Running scorecard pipeline..."):
+                # Determine use_woe based on model type
+                # Logistic Regression uses WOE, all others use raw data
+                use_woe = (model_type == 'logistic_regression')
+                
                 results = run_scorecard_pipeline_streamlit(
                     training_data=st.session_state.training_data,
                     new_applicant_data=st.session_state.new_applicant_data,
@@ -405,8 +398,8 @@ def main():
                     model_type=model_type,
                     model_params=model_params,
                     use_woe=use_woe,
-                    use_smote=use_smote,
-                    smote_k_neighbors=smote_k_neighbors
+                    use_smote=False,  # SMOTE disabled for all models
+                    smote_k_neighbors=5
                 )
                 st.session_state.results = results
                 st.success("✅ Pipeline completed successfully!")
