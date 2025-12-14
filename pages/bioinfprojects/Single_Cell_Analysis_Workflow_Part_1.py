@@ -51,7 +51,14 @@ for r_path in possible_r_paths:
         continue
 
 # First, check if pandoc is available and try to find RStudio's pandoc
-check_pandoc_script = '''# Check if pandoc is available and find it
+check_pandoc_script = '''# Check if rmarkdown is installed first
+if (!require('rmarkdown', quietly=TRUE)) {
+    cat("RMARKDOWN_ERROR: rmarkdown package is not installed.\\n")
+    cat("Please install it with: install.packages('rmarkdown', dependencies=TRUE)\\n")
+    quit(status = 1)
+}
+
+# Load rmarkdown library
 library(rmarkdown)
 
 # Detect operating system
@@ -202,6 +209,13 @@ rmd_file_r = str(RMD_FILE).replace("\\", "/")
 
 render_script = f'''# Set working directory
 setwd("{work_dir_r}")
+
+# Check if rmarkdown is installed first
+if (!require('rmarkdown', quietly=TRUE)) {{
+    cat("RMARKDOWN_ERROR: rmarkdown package is not installed.\\n")
+    cat("Please install it with: install.packages('rmarkdown', dependencies=TRUE)\\n")
+    stop("rmarkdown not available")
+}}
 
 # Load rmarkdown library
 library(rmarkdown)

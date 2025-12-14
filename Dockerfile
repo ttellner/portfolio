@@ -24,7 +24,9 @@ RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && which pandoc || (echo "ERROR: pandoc not found after installation" && exit 1) \
+    && pandoc --version || (echo "ERROR: pandoc not working" && exit 1)
 
 # Create symlinks for python and pip (remove existing if they exist)
 RUN rm -f /usr/bin/python /usr/bin/python3 && \
@@ -50,15 +52,18 @@ RUN pip3 install --no-cache-dir \
     scipy
 
 # Install basic R packages (without Seurat for faster builds)
-# Install in smaller batches and skip optional dependencies to avoid timeout
+# Install in smaller batches - rmarkdown needs dependencies
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages(c('jsonlite', 'readr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 1 had issues, continuing..." && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages(c('dplyr', 'tidyr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 2 had issues, continuing..." && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('ggplot2', 'knitr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 3 had issues, continuing..." && \
+    install.packages(c('ggplot2', 'knitr'), dependencies=TRUE, quiet=TRUE)" || echo "R packages batch 3 had issues, continuing..." && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('rmarkdown', 'patchwork'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 4 had issues, but continuing..."
+    install.packages('rmarkdown', dependencies=TRUE, quiet=TRUE)" && \
+    Rscript -e "if (!require('rmarkdown', quietly=TRUE)) { stop('rmarkdown not installed') }" && \
+    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 5 had issues, but continuing..."
 
 # Copy application code
 COPY . .
