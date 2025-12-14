@@ -9,6 +9,7 @@ ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
 # Install system dependencies (including nginx for WebSocket proxy)
+# Add system libraries needed for R graphics packages (ggplot2, isoband, etc.)
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-dev \
@@ -24,6 +25,15 @@ RUN apt-get update && apt-get install -y \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
+    libfontconfig1-dev \
+    libfreetype6-dev \
+    libfribidi-dev \
+    libharfbuzz-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff5-dev \
+    libcairo2-dev \
+    libpango1.0-dev \
     && rm -rf /var/lib/apt/lists/* \
     && which pandoc || (echo "ERROR: pandoc not found after installation" && exit 1) \
     && pandoc --version || (echo "ERROR: pandoc not working" && exit 1)
@@ -64,7 +74,10 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     Rscript -e "if (!require('dplyr', quietly=TRUE)) { stop('dplyr not installed') }"
 
 # Install ggplot2 with required dependencies (needed for visualization)
+# Try to install problematic dependencies first, then ggplot2
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages(c('isoband', 'scales', 'gtable', 'S7'), dependencies=FALSE, quiet=TRUE)" || echo "Some ggplot2 dependencies had issues, continuing..." && \
+    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages('ggplot2', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
     Rscript -e "if (!require('ggplot2', quietly=TRUE)) { stop('ggplot2 not installed') }"
 
