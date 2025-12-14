@@ -52,18 +52,35 @@ RUN pip3 install --no-cache-dir \
     scipy
 
 # Install basic R packages (without Seurat for faster builds)
-# Install in smaller batches - rmarkdown needs dependencies
+# Split into multiple RUN commands for better caching and to avoid timeout
+# Install minimal core packages first
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('jsonlite', 'readr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 1 had issues, continuing..." && \
+    install.packages(c('jsonlite', 'yaml', 'evaluate', 'highr', 'markdown', 'stringr', 'xfun'), \
+    dependencies=FALSE, quiet=TRUE)" || true
+
+# Install data manipulation packages (with dependencies to avoid build failures)
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('readr', dependencies=TRUE, quiet=TRUE)" || true && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('dplyr', 'tidyr'), dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 2 had issues, continuing..." && \
+    install.packages('dplyr', dependencies=TRUE, quiet=TRUE)" || true && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('ggplot2', 'knitr'), dependencies=TRUE, quiet=TRUE)" || echo "R packages batch 3 had issues, continuing..." && \
+    install.packages('tidyr', dependencies=TRUE, quiet=TRUE)" || true
+
+# Install visualization packages
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('ggplot2', dependencies=TRUE, quiet=TRUE)" || true && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('rmarkdown', dependencies=TRUE, quiet=TRUE)" && \
-    Rscript -e "if (!require('rmarkdown', quietly=TRUE)) { stop('rmarkdown not installed') }" && \
-    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || echo "R packages batch 5 had issues, but continuing..."
+    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || true
+
+# Install knitr (required for rmarkdown)
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('knitr', dependencies=TRUE, quiet=TRUE)" || true
+
+# Install rmarkdown - it should work now that all dependencies are installed
+# Use dependencies=FALSE since we've already installed the required packages
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('rmarkdown', dependencies=FALSE, quiet=TRUE)" && \
+    Rscript -e "if (!require('rmarkdown', quietly=TRUE)) { stop('rmarkdown not installed') }"
 
 # Copy application code
 COPY . .
