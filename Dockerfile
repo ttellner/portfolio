@@ -53,16 +53,30 @@ RUN pip3 install --no-cache-dir \
 
 # Install basic R packages (without Seurat for faster builds)
 # Install ONLY rmarkdown with required dependencies (not suggested packages)
-# This is the fastest approach - let R handle dependency resolution
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages('rmarkdown', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
     Rscript -e "if (!require('rmarkdown', quietly=TRUE)) { stop('rmarkdown not installed') }"
 
-# Install optional packages for bioinformatics projects (skip if they fail)
-# These are NOT required for rmarkdown to work
+# Install packages required by the R Markdown files
+# Install dplyr with required dependencies (needed for bioinformatics projects)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('jsonlite', 'readr', 'dplyr', 'tidyr', 'ggplot2', 'patchwork'), \
+    install.packages('dplyr', dependencies=c('Depends', 'Imports'), quiet=TRUE)" || true
+
+# Install ggplot2 with required dependencies (needed for visualization)
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('ggplot2', dependencies=c('Depends', 'Imports'), quiet=TRUE)" || true
+
+# Install patchwork (depends on ggplot2, but install with minimal deps)
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || true
+
+# Install other optional packages (skip if they fail)
+RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    install.packages(c('jsonlite', 'readr', 'tidyr'), \
     dependencies=FALSE, quiet=TRUE)" || echo "Optional R packages had issues, but continuing..."
+
+# Note: Seurat is NOT installed - it's too large and complex for this build
+# Users will need to install it separately if needed, or use a different approach
 
 # Copy application code
 COPY . .

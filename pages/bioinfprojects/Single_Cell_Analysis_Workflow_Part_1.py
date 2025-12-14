@@ -217,6 +217,30 @@ if (!require('rmarkdown', quietly=TRUE)) {{
     stop("rmarkdown not available")
 }}
 
+# Check for required packages and provide helpful error messages
+required_packages <- c('dplyr', 'ggplot2', 'patchwork')
+missing_packages <- character(0)
+for (pkg in required_packages) {{
+    if (!require(pkg, character.only=TRUE, quietly=TRUE)) {{
+        missing_packages <- c(missing_packages, pkg)
+    }}
+}}
+
+if (length(missing_packages) > 0) {{
+    cat("MISSING_PACKAGES:", paste(missing_packages, collapse=", "), "\\n")
+    cat("Please install missing packages: install.packages(c(", 
+        paste0("'", missing_packages, "'", collapse=", "), "), dependencies=TRUE)\\n")
+    stop(paste("Missing required packages:", paste(missing_packages, collapse=", ")))
+}}
+
+# Check for Seurat (optional but commonly used)
+if (!require('Seurat', quietly=TRUE)) {{
+    cat("WARNING: Seurat package is not installed.\\n")
+    cat("Some code chunks may fail. Seurat is large and complex to install.\\n")
+    cat("To install: install.packages('Seurat', dependencies=TRUE)\\n")
+    cat("Or use: if (!require('Seurat')) install.packages('Seurat')\\n")
+}}
+
 # Load rmarkdown library
 library(rmarkdown)
 
@@ -528,8 +552,17 @@ try:
     if process.returncode != 0:
         st.error("R script failed to render the document.")
         
-        # Check if it's a pandoc error
+        # Check for missing packages
         error_text = result[1] + result[0]
+        if "MISSING_PACKAGES:" in error_text:
+            st.error("**Missing Required R Packages**")
+            for line in error_text.split('\n'):
+                if "MISSING_PACKAGES:" in line:
+                    missing = line.split("MISSING_PACKAGES:")[1].strip()
+                    st.warning(f"Missing packages: {missing}")
+                    st.info("These packages should be installed automatically. If this error persists, the Docker build may have failed to install them.")
+        
+        # Check if it's a pandoc error
         if "pandoc" in error_text.lower():
             st.error("**Pandoc Error Detected**")
             st.markdown("""
