@@ -84,15 +84,9 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages(c('gtable', 'S7', 'scales'), dependencies=FALSE, quiet=TRUE)" || echo "Some dependencies had issues, continuing..." && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    result <- tryCatch(install.packages('ggplot2', dependencies=c('Depends', 'Imports'), quiet=TRUE), error=function(e) e); \
-    if (inherits(result, 'error')) { cat('ERROR installing ggplot2:', result$message, '\\n'); stop('ggplot2 installation failed') }" && \
-    Rscript -e "if (!require('ggplot2', character.only=TRUE, quietly=TRUE)) { \
-        cat('ERROR: ggplot2 package not found after installation\\n'); \
-        cat('Installed packages:', paste(installed.packages()[,'Package'], collapse=', '), '\\n'); \
-        stop('ggplot2 verification failed') \
-    } else { \
-        cat('SUCCESS: ggplot2 version', as.character(packageVersion('ggplot2')), 'installed and loaded\\n') \
-    }" && \
+    install.packages('ggplot2', dependencies=FALSE, quiet=TRUE)" && \
+    Rscript -e "if (!'ggplot2' %in% installed.packages()[,'Package']) { stop('ggplot2 not in installed packages') }" && \
+    Rscript -e "library(ggplot2); cat('SUCCESS: ggplot2 version', as.character(packageVersion('ggplot2')), 'installed and loaded\\n')" && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages('isoband', dependencies=FALSE, quiet=TRUE)" || echo "isoband optional - ggplot2 installed successfully"
 
