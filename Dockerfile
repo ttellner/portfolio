@@ -91,8 +91,9 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages('isoband', dependencies=FALSE, quiet=TRUE)" || echo "isoband optional - ggplot2 installed successfully"
 
 # Install patchwork (depends on ggplot2)
+# patchwork needs some dependencies, so install with minimal deps
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" && \
+    install.packages('patchwork', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
     Rscript -e "if (!require('patchwork', quietly=TRUE)) { stop('patchwork not installed') }"
 
 # Install other optional packages (skip if they fail)
