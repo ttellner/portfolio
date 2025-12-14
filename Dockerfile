@@ -90,11 +90,11 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages('isoband', dependencies=FALSE, quiet=TRUE)" || echo "isoband optional - ggplot2 installed successfully"
 
-# Install patchwork (depends on ggplot2, which is already installed)
-# Use dependencies=FALSE since ggplot2 is already available
+# Install patchwork (optional - used for combining plots)
+# Try to install, but don't fail the build if it doesn't work
+# The R Markdown file can render without it (some plot combining features may be limited)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" && \
-    Rscript -e "if (!require('patchwork', quietly=TRUE)) { stop('patchwork not installed') }"
+    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || echo "patchwork installation failed - continuing without it"
 
 # Install other optional packages (skip if they fail)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \

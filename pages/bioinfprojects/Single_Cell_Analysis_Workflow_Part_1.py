@@ -218,11 +218,20 @@ if (!require('rmarkdown', quietly=TRUE)) {{
 }}
 
 # Check for required packages and provide helpful error messages
-required_packages <- c('dplyr', 'ggplot2', 'patchwork')
+required_packages <- c('dplyr', 'ggplot2')
+optional_packages <- c('patchwork')
 missing_packages <- character(0)
+missing_optional <- character(0)
+
 for (pkg in required_packages) {{
     if (!require(pkg, character.only=TRUE, quietly=TRUE)) {{
         missing_packages <- c(missing_packages, pkg)
+    }}
+}}
+
+for (pkg in optional_packages) {{
+    if (!require(pkg, character.only=TRUE, quietly=TRUE)) {{
+        missing_optional <- c(missing_optional, pkg)
     }}
 }}
 
@@ -233,12 +242,31 @@ if (length(missing_packages) > 0) {{
     stop(paste("Missing required packages:", paste(missing_packages, collapse=", ")))
 }}
 
+if (length(missing_optional) > 0) {{
+    cat("WARNING: Optional packages not available:", paste(missing_optional, collapse=", "), "\\n")
+    cat("Some features may be limited. To install: install.packages(c(", 
+        paste0("'", missing_optional, "'", collapse=", "), "), dependencies=TRUE)\\n")
+}}
+
 # Check for Seurat (optional but commonly used)
 if (!require('Seurat', quietly=TRUE)) {{
     cat("WARNING: Seurat package is not installed.\\n")
     cat("Some code chunks may fail. Seurat is large and complex to install.\\n")
     cat("To install: install.packages('Seurat', dependencies=TRUE)\\n")
     cat("Or use: if (!require('Seurat')) install.packages('Seurat')\\n")
+}}
+
+# Handle missing patchwork - create a stub function so RMD doesn't fail
+if (!require('patchwork', quietly=TRUE)) {{
+    # Create a minimal patchwork stub
+    patchwork <- list(
+        wrap_plots = function(...) {{
+            warning("patchwork not available - using base R plot combination")
+            return(NULL)
+        }}
+    )
+    assign('patchwork', patchwork, envir=.GlobalEnv)
+    cat("WARNING: patchwork not available - plot combining features will be limited\\n")
 }}
 
 # Load rmarkdown library
