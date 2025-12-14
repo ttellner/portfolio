@@ -54,34 +54,51 @@ for r_path in possible_r_paths:
 check_pandoc_script = '''# Check if pandoc is available and find it
 library(rmarkdown)
 
-# Common pandoc installation paths to check
-username <- Sys.getenv("USERNAME", "")
-local_appdata <- Sys.getenv("LOCALAPPDATA", "")
-program_files <- Sys.getenv("PROGRAMFILES", "")
-program_files_x86 <- Sys.getenv("PROGRAMFILES(X86)", "")
+# Detect operating system
+is_windows <- .Platform$OS.type == "windows"
+path_sep <- if (is_windows) ";" else ":"
 
-common_paths <- c(
-    "C:/Program Files/RStudio/resources/app/bin/pandoc",
-    "C:/Program Files (x86)/RStudio/resources/app/bin/pandoc",
-    "C:/Program Files/Pandoc",
-    "C:/Program Files (x86)/Pandoc"
-)
+# Common pandoc installation paths to check (OS-specific)
+common_paths <- character(0)
 
-if (username != "") {
-    common_paths <- c(common_paths, paste0("C:/Users/", username, "/AppData/Local/Pandoc"))
-}
-if (local_appdata != "") {
-    common_paths <- c(common_paths, file.path(local_appdata, "Pandoc"))
-}
-if (program_files != "") {
-    common_paths <- c(common_paths, file.path(program_files, "Pandoc"))
-}
-if (program_files_x86 != "") {
-    common_paths <- c(common_paths, file.path(program_files_x86, "Pandoc"))
+if (is_windows) {
+    # Windows paths
+    username <- Sys.getenv("USERNAME", "")
+    local_appdata <- Sys.getenv("LOCALAPPDATA", "")
+    program_files <- Sys.getenv("PROGRAMFILES", "")
+    program_files_x86 <- Sys.getenv("PROGRAMFILES(X86)", "")
+    
+    common_paths <- c(
+        "C:/Program Files/RStudio/resources/app/bin/pandoc",
+        "C:/Program Files (x86)/RStudio/resources/app/bin/pandoc",
+        "C:/Program Files/Pandoc",
+        "C:/Program Files (x86)/Pandoc"
+    )
+    
+    if (username != "") {
+        common_paths <- c(common_paths, paste0("C:/Users/", username, "/AppData/Local/Pandoc"))
+    }
+    if (local_appdata != "") {
+        common_paths <- c(common_paths, file.path(local_appdata, "Pandoc"))
+    }
+    if (program_files != "") {
+        common_paths <- c(common_paths, file.path(program_files, "Pandoc"))
+    }
+    if (program_files_x86 != "") {
+        common_paths <- c(common_paths, file.path(program_files_x86, "Pandoc"))
+    }
+} else {
+    # Linux/Unix paths
+    common_paths <- c(
+        "/usr/bin",
+        "/usr/local/bin",
+        "/opt/pandoc/bin",
+        "/usr/share/pandoc/bin"
+    )
 }
 
 # Ensure common_paths is always defined
-if (!exists("common_paths") || is.null(common_paths)) {
+if (!exists("common_paths") || is.null(common_paths) || length(common_paths) == 0) {
     common_paths <- character(0)
 }
 
@@ -89,8 +106,13 @@ if (!exists("common_paths") || is.null(common_paths)) {
 check_pandoc_path <- function(base_path) {
     if (is.na(base_path) || base_path == "") return(NULL)
     
-    # Try different executable names
-    exe_names <- c("pandoc.exe", "pandoc")
+    # Try different executable names (OS-specific)
+    if (is_windows) {
+        exe_names <- c("pandoc.exe", "pandoc")
+    } else {
+        exe_names <- c("pandoc")
+    }
+    
     for (exe_name in exe_names) {
         full_path <- file.path(base_path, exe_name)
         if (file.exists(full_path)) {
@@ -111,8 +133,12 @@ pandoc_path <- NULL
 
 # If rmarkdown found it, use that
 if (!is.null(pandoc_info) && !is.null(pandoc_info$dir)) {
-    pandoc_path <- file.path(pandoc_info$dir, "pandoc.exe")
-    if (!file.exists(pandoc_path)) {
+    if (is_windows) {
+        pandoc_path <- file.path(pandoc_info$dir, "pandoc.exe")
+        if (!file.exists(pandoc_path)) {
+            pandoc_path <- file.path(pandoc_info$dir, "pandoc")
+        }
+    } else {
         pandoc_path <- file.path(pandoc_info$dir, "pandoc")
     }
     if (file.exists(pandoc_path)) {
@@ -131,7 +157,10 @@ if ((is.null(pandoc_path) || !file.exists(pandoc_path)) && exists("common_paths"
             if (!is.null(found_path)) {
                 pandoc_path <- found_path
                 Sys.setenv(PANDOC = pandoc_path)
-                Sys.setenv(PATH = paste(Sys.getenv("PATH"), dirname(pandoc_path), sep = ";"))
+                # Update PATH with correct separator for OS
+                current_path <- Sys.getenv("PATH")
+                pandoc_dir <- dirname(pandoc_path)
+                Sys.setenv(PATH = paste(current_path, pandoc_dir, sep = path_sep))
                 cat("PANDOC_PATH:", pandoc_path, "\\n")
                 break
             }
@@ -139,7 +168,7 @@ if ((is.null(pandoc_path) || !file.exists(pandoc_path)) && exists("common_paths"
     }
 }
 
-# Also check system PATH
+# Also check system PATH (this should work on both Windows and Linux)
 if (is.null(pandoc_path) || !file.exists(pandoc_path)) {
     system_pandoc <- Sys.which("pandoc")
     if (system_pandoc != "") {
@@ -177,41 +206,65 @@ setwd("{work_dir_r}")
 # Load rmarkdown library
 library(rmarkdown)
 
-# Common pandoc installation paths to check
-username <- Sys.getenv("USERNAME", "")
-local_appdata <- Sys.getenv("LOCALAPPDATA", "")
-program_files <- Sys.getenv("PROGRAMFILES", "")
-program_files_x86 <- Sys.getenv("PROGRAMFILES(X86)", "")
+# Detect operating system
+is_windows <- .Platform$OS.type == "windows"
+path_sep <- if (is_windows) ";" else ":"
 
-common_paths <- c(
-    "C:/Program Files/RStudio/resources/app/bin/pandoc",
-    "C:/Program Files (x86)/RStudio/resources/app/bin/pandoc",
-    "C:/Program Files/Pandoc",
-    "C:/Program Files (x86)/Pandoc"
-)
+# Common pandoc installation paths to check (OS-specific)
+common_paths <- character(0)
 
-if (username != "") {{
-    common_paths <- c(common_paths, paste0("C:/Users/", username, "/AppData/Local/Pandoc"))
-}}
-if (local_appdata != "") {{
-    common_paths <- c(common_paths, file.path(local_appdata, "Pandoc"))
-}}
-if (program_files != "") {{
-    common_paths <- c(common_paths, file.path(program_files, "Pandoc"))
-}}
-if (program_files_x86 != "") {{
-    common_paths <- c(common_paths, file.path(program_files_x86, "Pandoc"))
+if (is_windows) {{
+    # Windows paths
+    username <- Sys.getenv("USERNAME", "")
+    local_appdata <- Sys.getenv("LOCALAPPDATA", "")
+    program_files <- Sys.getenv("PROGRAMFILES", "")
+    program_files_x86 <- Sys.getenv("PROGRAMFILES(X86)", "")
+    
+    common_paths <- c(
+        "C:/Program Files/RStudio/resources/app/bin/pandoc",
+        "C:/Program Files (x86)/RStudio/resources/app/bin/pandoc",
+        "C:/Program Files/Pandoc",
+        "C:/Program Files (x86)/Pandoc"
+    )
+    
+    if (username != "") {{
+        common_paths <- c(common_paths, paste0("C:/Users/", username, "/AppData/Local/Pandoc"))
+    }}
+    if (local_appdata != "") {{
+        common_paths <- c(common_paths, file.path(local_appdata, "Pandoc"))
+    }}
+    if (program_files != "") {{
+        common_paths <- c(common_paths, file.path(program_files, "Pandoc"))
+    }}
+    if (program_files_x86 != "") {{
+        common_paths <- c(common_paths, file.path(program_files_x86, "Pandoc"))
+    }}
+}} else {{
+    # Linux/Unix paths
+    common_paths <- c(
+        "/usr/bin",
+        "/usr/local/bin",
+        "/opt/pandoc/bin",
+        "/usr/share/pandoc/bin"
+    )
 }}
 
 # Ensure common_paths is always defined
-if (!exists("common_paths") || is.null(common_paths)) {{
+if (!exists("common_paths") || is.null(common_paths) || length(common_paths) == 0) {{
     common_paths <- character(0)
 }}
 
 # Function to check if pandoc exists at a path
 check_pandoc_path <- function(base_path) {{
     if (is.na(base_path) || base_path == "") return(NULL)
-    exe_names <- c("pandoc.exe", "pandoc")
+    
+    # Try different executable names (OS-specific)
+    if (is_windows) {{
+        exe_names <- c("pandoc.exe", "pandoc")
+    }} else {{
+        exe_names <- c("pandoc")
+    }}
+    
     for (exe_name in exe_names) {{
         full_path <- file.path(base_path, exe_name)
         if (file.exists(full_path)) {{
@@ -232,13 +285,20 @@ pandoc_path <- NULL
 
 # If rmarkdown found it, use that
 if (!is.null(pandoc_info) && !is.null(pandoc_info$dir)) {{
-    pandoc_path <- file.path(pandoc_info$dir, "pandoc.exe")
-    if (!file.exists(pandoc_path)) {{
+    if (is_windows) {{
+        pandoc_path <- file.path(pandoc_info$dir, "pandoc.exe")
+        if (!file.exists(pandoc_path)) {{
+            pandoc_path <- file.path(pandoc_info$dir, "pandoc")
+        }}
+    }} else {{
         pandoc_path <- file.path(pandoc_info$dir, "pandoc")
     }}
     if (file.exists(pandoc_path)) {{
         Sys.setenv(PANDOC = pandoc_path)
-        Sys.setenv(PATH = paste(Sys.getenv("PATH"), dirname(pandoc_path), sep = ";"))
+        # Update PATH with correct separator for OS
+        current_path <- Sys.getenv("PATH")
+        pandoc_dir <- dirname(pandoc_path)
+        Sys.setenv(PATH = paste(current_path, pandoc_dir, sep = path_sep))
     }} else {{
         pandoc_path <- NULL
     }}
@@ -252,14 +312,17 @@ if ((is.null(pandoc_path) || !file.exists(pandoc_path)) && exists("common_paths"
             if (!is.null(found_path)) {{
                 pandoc_path <- found_path
                 Sys.setenv(PANDOC = pandoc_path)
-                Sys.setenv(PATH = paste(Sys.getenv("PATH"), dirname(pandoc_path), sep = ";"))
+                # Update PATH with correct separator for OS
+                current_path <- Sys.getenv("PATH")
+                pandoc_dir <- dirname(pandoc_path)
+                Sys.setenv(PATH = paste(current_path, pandoc_dir, sep = path_sep))
                 break
             }}
         }}
     }}
 }}
 
-# Also check system PATH
+# Also check system PATH (this should work on both Windows and Linux)
 if (is.null(pandoc_path) || !file.exists(pandoc_path)) {{
     system_pandoc <- Sys.which("pandoc")
     if (system_pandoc != "") {{
@@ -272,10 +335,16 @@ if (is.null(pandoc_path) || !file.exists(pandoc_path)) {{
 if (!pandoc_available()) {{
     cat("PANDOC_ERROR: pandoc is not available. Please install pandoc.\\n")
     cat("Installation options:\\n")
-    cat("1. Install RStudio (includes pandoc): ")
-    cat("https://www.rstudio.com/products/rstudio/download/\\n")
-    cat("2. Install pandoc directly: https://pandoc.org/installing.html\\n")
-    cat("3. Use chocolatey: choco install pandoc\\n")
+    if (is_windows) {{
+        cat("1. Install RStudio (includes pandoc): ")
+        cat("https://www.rstudio.com/products/rstudio/download/\\n")
+        cat("2. Install pandoc directly: https://pandoc.org/installing.html\\n")
+        cat("3. Use chocolatey: choco install pandoc\\n")
+    }} else {{
+        cat("1. Install pandoc: sudo apt-get install pandoc (Debian/Ubuntu)\\n")
+        cat("2. Or: sudo yum install pandoc (RHEL/CentOS)\\n")
+        cat("3. Or download from: https://pandoc.org/installing.html\\n")
+    }}
     stop("pandoc not available")
 }}
 
