@@ -218,14 +218,34 @@ if (!require('rmarkdown', quietly=TRUE)) {{
 }}
 
 # Check for required packages and provide helpful error messages
+# First, check what packages are actually installed
+installed_pkgs <- installed.packages()[,'Package']
+cat("DEBUG: Installed packages include:", paste(head(installed_pkgs, 20), collapse=", "), "...\\n")
+cat("DEBUG: Total installed packages:", length(installed_pkgs), "\\n")
+cat("DEBUG: ggplot2 installed?", 'ggplot2' %in% installed_pkgs, "\\n")
+cat("DEBUG: dplyr installed?", 'dplyr' %in% installed_pkgs, "\\n")
+
 required_packages <- c('dplyr', 'ggplot2')
 optional_packages <- c('patchwork')
 missing_packages <- character(0)
 missing_optional <- character(0)
 
 for (pkg in required_packages) {{
-    if (!require(pkg, character.only=TRUE, quietly=TRUE)) {{
+    # Try to load the package
+    load_result <- tryCatch({{
+        library(pkg, character.only=TRUE, quietly=TRUE)
+        TRUE
+    }}, error=function(e) {{
+        cat("DEBUG: Error loading", pkg, ":", e$message, "\\n")
+        FALSE
+    }})
+    
+    if (!load_result) {{
         missing_packages <- c(missing_packages, pkg)
+        # Check if it's installed but just can't be loaded
+        if (pkg %in% installed_pkgs) {{
+            cat("WARNING:", pkg, "is installed but cannot be loaded. May have dependency issues.\\n")
+        }}
     }}
 }}
 
