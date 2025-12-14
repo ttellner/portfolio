@@ -60,15 +60,18 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
 # Install packages required by the R Markdown files
 # Install dplyr with required dependencies (needed for bioinformatics projects)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('dplyr', dependencies=c('Depends', 'Imports'), quiet=TRUE)" || true
+    install.packages('dplyr', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
+    Rscript -e "if (!require('dplyr', quietly=TRUE)) { stop('dplyr not installed') }"
 
 # Install ggplot2 with required dependencies (needed for visualization)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('ggplot2', dependencies=c('Depends', 'Imports'), quiet=TRUE)" || true
+    install.packages('ggplot2', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
+    Rscript -e "if (!require('ggplot2', quietly=TRUE)) { stop('ggplot2 not installed') }"
 
-# Install patchwork (depends on ggplot2, but install with minimal deps)
+# Install patchwork (depends on ggplot2)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || true
+    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" && \
+    Rscript -e "if (!require('patchwork', quietly=TRUE)) { stop('patchwork not installed') }"
 
 # Install other optional packages (skip if they fail)
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
