@@ -77,15 +77,15 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     Rscript -e "if (!require('dplyr', quietly=TRUE)) { stop('dplyr not installed') }"
 
 # Install ggplot2 with required dependencies (needed for visualization)
-# Install core dependencies first, then ggplot2
-# Note: isoband may fail but ggplot2 can work without it for basic functionality
+# Install core dependencies first, then ggplot2 with its required dependencies
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages(c('farver', 'labeling', 'RColorBrewer', 'viridisLite'), \
     dependencies=FALSE, quiet=TRUE)" || echo "Some dependencies had issues, continuing..." && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages(c('gtable', 'S7', 'scales'), dependencies=FALSE, quiet=TRUE)" || echo "Some dependencies had issues, continuing..." && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('ggplot2', dependencies=FALSE, quiet=TRUE)" && \
+    install.packages('ggplot2', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
+    Rscript -e "library(ggplot2); cat('ggplot2 version:', as.character(packageVersion('ggplot2')), '\\n')" && \
     Rscript -e "if (!require('ggplot2', quietly=TRUE)) { stop('ggplot2 not installed') }" && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     install.packages('isoband', dependencies=FALSE, quiet=TRUE)" || echo "isoband optional - ggplot2 installed successfully"
