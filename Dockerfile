@@ -1,5 +1,6 @@
 # Simplified Dockerfile for testing (without Seurat to reduce build time)
 # Use this to test if basic setup works, then switch to main Dockerfile
+# Updated: 2025-01-13 - Force rebuild to fix ggplot2 installation
 FROM ubuntu:22.04
 
 # Set environment variables to avoid interactive prompts
@@ -7,6 +8,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
+# Build cache buster - change this to force rebuild
+ARG BUILD_DATE=2025-01-13
+ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
 # Add system libraries needed for R graphics packages (ggplot2, isoband, etc.)
