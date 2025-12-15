@@ -21,12 +21,22 @@ with st.sidebar:
     st.markdown("Data Science | ML & AI | GenAI")
     st.markdown("---")
     
-    # Navigation links
+    # Navigation links - context aware
     st.markdown("**Navigation:**")
     st.page_link("Home.py", label="🏠 Home", icon="🏠")
-    st.markdown("📍 **ML/AI for Bioinformatics and Omics** (Current)")
-    st.markdown("---")
     
+    # Check if we're on a specific project (via query params)
+    query_params = st.query_params
+    if "project" in query_params:
+        # We're on a specific project, show link back to this page
+        st.page_link("pages/bioinfprojects.py", label="📂 ML/AI for Bioinformatics", icon="📂")
+        project_name = query_params["project"].replace(".py", "").replace("_", " ").title()
+        st.markdown(f"📍 **{project_name}** (Current)")
+    else:
+        # We're on the project page itself
+        st.markdown("📍 **ML/AI for Bioinformatics and Omics** (Current)")
+    
+    st.markdown("---")
     st.markdown("**Contact:**")
     st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
     st.markdown("[💻 GitHub](https://github.com/ttellner)")
@@ -47,6 +57,7 @@ st.write("""The format below is HTML markdown from RStudio.
 base_dir = Path(__file__).parent / "bioinfprojects"
 
 # Handle internal navigation (when a project is selected)
+# Note: query_params is also used in sidebar above, so we check it again here
 query_params = st.query_params
 if "project" in query_params:
     project_file = query_params["project"]
