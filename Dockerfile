@@ -77,18 +77,34 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     Rscript -e "if (!require('dplyr', quietly=TRUE)) { stop('dplyr not installed') }"
 
 # Install ggplot2 with required dependencies (needed for visualization)
-# Install core dependencies first, then ggplot2
+# Install all dependencies first, then ggplot2 in a separate step for better error visibility
 RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
+    cat('Installing ggplot2 dependencies...\\n'); \
     install.packages(c('farver', 'labeling', 'RColorBrewer', 'viridisLite'), \
-    dependencies=FALSE, quiet=TRUE)" && \
+    dependencies=FALSE, quiet=FALSE)" && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('gtable', 'S7', 'scales'), dependencies=FALSE, quiet=TRUE)" && \
+    cat('Installing more ggplot2 dependencies...\\n'); \
+    install.packages(c('gtable', 'S7', 'scales'), dependencies=FALSE, quiet=FALSE)" && \
     Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    result <- install.packages('ggplot2', dependencies=FALSE, quiet=TRUE); \
-    if (is.null(result) || length(result) == 0) { stop('ggplot2 installation failed') }" && \
+    cat('R library paths:', paste(.libPaths(), collapse=': '), '\\n'); \
+    cat('Installing ggplot2...\\n'); \
+    result <- tryCatch({ \
+        install.packages('ggplot2', dependencies=FALSE, quiet=FALSE, repos='https://cran.rstudio.com/') \
+    }, error=function(e) { \
+        cat('ERROR during ggplot2 installation:', e$message, '\\n'); \
+        stop(e) \
+    }, warning=function(w) { \
+        cat('WARNING during ggplot2 installation:', w$message, '\\n') \
+    }); \
+    if (is.null(result)) { stop('ggplot2 installation returned NULL') }; \
+    cat('ggplot2 installation result:', paste(result, collapse=', '), '\\n'); \
+    cat('Checking immediately after install...\\n'); \
+    installed_now <- rownames(installed.packages()); \
+    cat('ggplot2 in installed packages?', 'ggplot2' %in% installed_now, '\\n')" && \
     Rscript -e "installed <- rownames(installed.packages()); \
+    cat('Checking for ggplot2 in', length(installed), 'installed packages...\\n'); \
     if (!'ggplot2' %in% installed) { \
-        cat('ERROR: ggplot2 not found. Sample installed:', paste(head(installed, 10), collapse=', '), '...\\n'); \
+        cat('ERROR: ggplot2 not found. First 20 installed:', paste(head(installed, 20), collapse=', '), '...\\n'); \
         stop('ggplot2 verification failed') \
     } else { \
         cat('SUCCESS: ggplot2 found in installed packages\\n') \
