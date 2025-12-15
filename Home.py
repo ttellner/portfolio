@@ -139,30 +139,6 @@ with st.sidebar:
     st.title("Thomas Tellner")
     st.markdown("Data Science | ML & AI | GenAI")
     st.markdown("---")
-    
-    # Navigation links to project pages
-    st.markdown("**Navigation:**")
-    st.markdown("📍 **Home** (Current)")
-    
-    # Define custom order for project pages
-    custom_order = [
-        "bioinfprojects.py",
-        "bankingprojects.py",
-        "financeprojects.py",
-        "gnnprojects.py",
-        "gamedatascience.py",
-    ]
-    
-    # Get existing project pages
-    project_dir = "pages"
-    if os.path.exists(project_dir):
-        project_files = [f for f in custom_order if os.path.exists(os.path.join(project_dir, f))]
-        for f in project_files:
-            page_path = f"pages/{f}"
-            page_title = f.replace(".py", "").replace("_", " ").title()
-            st.page_link(page_path, label=page_title, icon="📂")
-    
-    st.markdown("---")
     st.markdown("**Contact:**")
     st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
     st.markdown("[💻 GitHub](https://github.com/ttellner)")

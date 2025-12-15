@@ -14,6 +14,14 @@ st.set_page_config(
 
 apply_theme()
 
+# Hide Streamlit's built-in navigation
+st.markdown("""
+<style>
+section[data-testid="stSidebarNav"] { display: none; }
+nav[aria-label="Secondary"] { display: none; }
+</style>
+""", unsafe_allow_html=True)
+
 # ---- SIDEBAR PROFILE ----
 with st.sidebar:
     #st.image("https://via.placeholder.com/150", width=200) 

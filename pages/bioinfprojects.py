@@ -14,28 +14,19 @@ st.set_page_config(
 
 apply_theme()
 
+# Hide Streamlit's built-in navigation
+st.markdown("""
+<style>
+section[data-testid="stSidebarNav"] { display: none; }
+nav[aria-label="Secondary"] { display: none; }
+</style>
+""", unsafe_allow_html=True)
+
 # ---- SIDEBAR PROFILE ----
 with st.sidebar:
     #st.image("https://via.placeholder.com/150", width=200) 
     st.title("Thomas Tellner")
     st.markdown("Data Science | ML & AI | GenAI")
-    st.markdown("---")
-    
-    # Navigation links - context aware
-    st.markdown("**Navigation:**")
-    st.page_link("Home.py", label="🏠 Home", icon="🏠")
-    
-    # Check if we're on a specific project (via query params)
-    query_params = st.query_params
-    if "project" in query_params:
-        # We're on a specific project, show link back to this page
-        st.page_link("pages/bioinfprojects.py", label="📂 ML/AI for Bioinformatics", icon="📂")
-        project_name = query_params["project"].replace(".py", "").replace("_", " ").title()
-        st.markdown(f"📍 **{project_name}** (Current)")
-    else:
-        # We're on the project page itself
-        st.markdown("📍 **ML/AI for Bioinformatics and Omics** (Current)")
-    
     st.markdown("---")
     st.markdown("**Contact:**")
     st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
