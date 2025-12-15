@@ -9,6 +9,25 @@ from pathlib import Path
 
 st.set_page_config(layout="wide", page_title="Single-Cell Analysis Part 2")
 
+# Add navigation sidebar
+with st.sidebar:
+    st.title("Thomas Tellner")
+    st.markdown("Data Science | ML & AI | GenAI")
+    st.markdown("---")
+    
+    # Navigation links
+    st.markdown("**Navigation:**")
+    st.page_link("Home.py", label="🏠 Home", icon="🏠")
+    st.page_link("pages/bioinfprojects.py", label="📂 ML/AI for Bioinformatics", icon="📂")
+    st.markdown("📍 **Single Cell Analysis Part 2** (Current)")
+    st.markdown("---")
+    
+    st.markdown("**Contact:**")
+    st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
+    st.markdown("[💻 GitHub](https://github.com/ttellner)")
+    st.markdown("[✉️ Email](mailto:ttellner@gmail.com)")
+    st.markdown("---")
+
 st.markdown("## Single-Cell Analysis Workflow - Python/TensorFlow Analysis")
 st.markdown("#### VAE-based Dimensionality Reduction and Clustering - Code Display Only")
 
@@ -149,7 +168,7 @@ def display_cell(cell, cell_num, cell_index):
 notebook = load_notebook()
 
 if notebook:
-    st.sidebar.markdown("### Navigation")
+    st.sidebar.markdown("### Notebook Navigation")
     
     # Get all code cells for navigation
     code_cells = []

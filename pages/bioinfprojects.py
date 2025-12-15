@@ -20,6 +20,13 @@ with st.sidebar:
     st.title("Thomas Tellner")
     st.markdown("Data Science | ML & AI | GenAI")
     st.markdown("---")
+    
+    # Navigation links
+    st.markdown("**Navigation:**")
+    st.page_link("Home.py", label="🏠 Home", icon="🏠")
+    st.markdown("📍 **ML/AI for Bioinformatics and Omics** (Current)")
+    st.markdown("---")
+    
     st.markdown("**Contact:**")
     st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
     st.markdown("[💻 GitHub](https://github.com/ttellner)")
@@ -29,8 +36,10 @@ with st.sidebar:
 
 
 st.title("Machine Learning for Bioinformatics and Omics")
-st.write("""ML/AI for Bioinformatics and Omics
+st.write("""ML/AI for Bioinformatics and Omics.
          Explore and run machine learning demos below.""")
+st.write("""The format below is HTML markdown from RStudio.
+         For technical reasons, both AWS and Railway could not render the file with ggplot2.""")
 
 # --- Base directory for project files ---
 # Use Path(__file__).parent to get the directory containing this file
@@ -65,6 +74,18 @@ else:
     if not project_files:
         st.info("No ML projects found in this folder.")
     else:
+        # Sort project files so Part_1 comes before Part_2
+        def sort_key(filename):
+            # Extract part number if it exists (e.g., "Part_1" -> 1, "Part_2" -> 2)
+            if "Part_1" in filename:
+                return (0, filename)  # Part_1 comes first
+            elif "Part_2" in filename:
+                return (1, filename)  # Part_2 comes second
+            else:
+                return (2, filename)  # Others come last
+        
+        project_files = sorted(project_files, key=sort_key)
+        
         num_cols = 3
         for i in range(0, len(project_files), num_cols):
             cols = st.columns(num_cols)

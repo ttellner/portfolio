@@ -8,6 +8,33 @@ from pathlib import Path
 
 st.set_page_config(layout="wide")
 
+# Add navigation sidebar
+with st.sidebar:
+    st.title("Thomas Tellner")
+    st.markdown("Data Science | ML & AI | GenAI")
+    st.markdown("---")
+    
+    # Navigation links
+    st.markdown("**Navigation:**")
+    st.page_link("Home.py", label="🏠 Home", icon="🏠")
+    st.page_link("pages/bioinfprojects.py", label="📂 ML/AI for Bioinformatics", icon="📂")
+    st.markdown("📍 **Single Cell Analysis Part 1** (Current)")
+    st.markdown("---")
+    
+    st.markdown("**Contact:**")
+    st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
+    st.markdown("[💻 GitHub](https://github.com/ttellner)")
+    st.markdown("[✉️ Email](mailto:ttellner@gmail.com)")
+    st.markdown("---")
+    st.caption("Made using Streamlit")
+    
+    st.markdown("**Contact:**")
+    st.markdown("[🌐 LinkedIn](https://linkedin.com/in/thomastellner)")
+    st.markdown("[💻 GitHub](https://github.com/ttellner)")
+    st.markdown("[✉️ Email](mailto:ttellner@gmail.com)")
+    st.markdown("---")
+    st.caption("Made using Streamlit")
+
 st.markdown("## Single-Cell Analysis Workflow - R/Seurat Analysis")
 st.markdown("#### R/Seurat Data Ingestion, QC and Prep")
 
