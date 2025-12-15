@@ -95,10 +95,10 @@ RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
     result <- tryCatch({ \
         install.packages('ggplot2', dependencies=FALSE, quiet=FALSE, repos='https://cran.rstudio.com/') \
     }, error=function(e) { \
-        cat('ERROR during ggplot2 installation:', e$message, '\\n'); \
+        cat('ERROR during ggplot2 installation:', as.character(e$message), '\\n'); \
         stop(e) \
     }, warning=function(w) { \
-        cat('WARNING during ggplot2 installation:', w$message, '\\n') \
+        cat('WARNING during ggplot2 installation:', as.character(w$message), '\\n') \
     }); \
     if (is.null(result)) { stop('ggplot2 installation returned NULL') }; \
     cat('ggplot2 installation result:', paste(result, collapse=', '), '\\n'); \
