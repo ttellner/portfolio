@@ -1,3 +1,8 @@
+"""
+Machine Learning for Bioinformatics and Omics
+ML/AI for Bioinformatics and Omics. Explore and run machine learning demos below.
+https://via.placeholder.com/400x200?text=Bioinformatics
+"""
 import streamlit as st
 import os
 import re

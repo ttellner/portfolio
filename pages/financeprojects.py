@@ -1,3 +1,8 @@
+"""
+Machine Learning for Finance and Investments
+ML/AI for Finance and Investments. Explore and run machine learning demos below.
+https://via.placeholder.com/400x200?text=Finance+Investments
+"""
 import streamlit as st
 import os
 import re
