@@ -185,15 +185,25 @@ if not project_files:
 projects = []
 for f in project_files:
     file_path = os.path.join(project_dir, f)
-    with open(file_path, "r", encoding="utf-8") as file:
-        content = file.read()
-        docstring_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
-        if docstring_match:
-            lines = [line.strip() for line in docstring_match.group(1).split("\n") if line.strip()]
-            title = lines[0] if len(lines) > 0 else f.replace(".py", "")
-            desc = lines[1] if len(lines) > 1 else "No description provided."
-            img = lines[2] if len(lines) > 2 else "https://via.placeholder.com/400x200?text=Data+Science+App"
+    try:
+        with open(file_path, "r", encoding="utf-8") as file:
+            content = file.read()
+            docstring_match = re.search(r'"""(.*?)"""', content, re.DOTALL)
+            if docstring_match:
+                lines = [line.strip() for line in docstring_match.group(1).split("\n") if line.strip()]
+                title = lines[0] if len(lines) > 0 else f.replace(".py", "").replace("_", " ").title()
+                desc = lines[1] if len(lines) > 1 else "No description provided."
+                img = lines[2] if len(lines) > 2 else "https://via.placeholder.com/400x200?text=Data+Science+App"
+            else:
+                # Fallback if no docstring found
+                title = f.replace(".py", "").replace("_", " ").title()
+                desc = "No description provided."
+                img = "https://via.placeholder.com/400x200?text=Data+Science+App"
             projects.append({"file": f, "title": title, "description": desc, "image": img})
+    except Exception:
+        # If file can't be read, still add it with default values
+        title = f.replace(".py", "").replace("_", " ").title()
+        projects.append({"file": f, "title": title, "description": "No description available.", "image": "https://via.placeholder.com/400x200?text=Data+Science+App"})
 #st.write("DEBUG:", projects)
 
 # ---- DISPLAY PROJECT CARDS DYNAMICALLY ----
