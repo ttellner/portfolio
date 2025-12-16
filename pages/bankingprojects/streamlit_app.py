@@ -49,7 +49,7 @@ DEFAULT_NEW_APPLICANT_FILE = str(current_dir / "data" / "New_Applicant_Dataset__
 # Page configuration
 st.set_page_config(
     page_title="Credit Scorecard Application",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -98,7 +98,7 @@ def main():
     """Main Streamlit application."""
     
     # Header
-    st.markdown('<h1 class="main-header">📊 Credit Scorecard Application</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">Credit Scorecard Application</h1>', unsafe_allow_html=True)
     st.markdown("---")
     
     # Data deletion notice

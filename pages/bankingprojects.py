@@ -13,7 +13,6 @@ from theme import apply_theme
 # ---- PAGE CONFIG ----
 st.set_page_config(
     page_title="Thomas Tellner | Data Science Portfolio",
-    page_icon="",
     layout="wide",
 )
 
@@ -42,7 +41,7 @@ with st.sidebar:
 
 
 # --- Main Page ---
-st.title("Machine Learning for Banking and Finance")
+st.title("Machine Learning for Banking and Lending")
 st.write("""ML/AI for Banking and Lending
          Explore and run machine learning demos below.""")
 
