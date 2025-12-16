@@ -13,7 +13,7 @@ from theme import apply_theme
 # ---- PAGE CONFIG ----
 st.set_page_config(
     page_title="Thomas Tellner | Data Science Portfolio",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
 )
 
