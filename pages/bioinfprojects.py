@@ -44,8 +44,10 @@ with st.sidebar:
 st.title("Machine Learning for Bioinformatics and Omics")
 st.write("""ML/AI for Bioinformatics and Omics.
          Explore and run machine learning demos below.""")
-st.write("""The format below is HTML markdown from RStudio.
-         For technical reasons, both AWS and Railway could not render the file with ggplot2.""")
+st.write("""The format for 'Single Cell Analysis Part 1' is HTML markdown from RStudio.
+         For technical reasons, both AWS and Railway could not render the file with ggplot2.
+         For'Single Cell Analysis Part 2', due to the size of the data involved, you can see both code and
+         output cell in dropdowns only.""")
 
 # --- Base directory for project files ---
 # Use Path(__file__).parent to get the directory containing this file
