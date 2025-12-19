@@ -99,6 +99,16 @@ def main():
     
     # Header
     st.markdown('<h1 class="main-header">Credit Scorecard Application</h1>', unsafe_allow_html=True)
+    
+    # Notice text - centered and block-aligned
+    st.markdown("""
+    <div style="text-align: center; max-width: 800px; margin: 0 auto; padding: 1rem 0;">
+        <p style="text-align: justify; margin: 0;">
+            Please note: These models assume that the user has done data cleaning and EDA etc. 'Column Selection' on the lefthand sidebar is only available for users to tweak their data based on the feature importances discovered while running the models.  This is done to avoid excessive demands on storage and compute. This is a portfolio site, not a SaaS application.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.markdown("---")
     
     # Data deletion notice
