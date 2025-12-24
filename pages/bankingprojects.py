@@ -74,7 +74,21 @@ if "project" in query_params:
 if not base_dir.exists():
     st.warning(f"No ML project directory found at: {base_dir}")
 else:
-    project_files = [f.name for f in base_dir.iterdir() if f.suffix == ".py"]
+    # Filter out internal/helper files (e.g., _functions.py files)
+    project_files = [f.name for f in base_dir.iterdir() 
+                     if f.suffix == ".py" and "_functions" not in f.name]
+    
+    # Sort files: data_pipeline.py should come before streamlit_app.py
+    def sort_key(filename):
+        if "data_pipeline" in filename and "functions" not in filename:
+            return (0, filename)  # data_pipeline.py comes first
+        elif "streamlit_app" in filename:
+            return (1, filename)  # streamlit_app.py comes second
+        else:
+            return (2, filename)  # Others come last
+    
+    project_files = sorted(project_files, key=sort_key)
+    
     if not project_files:
         st.info("No ML projects found in this folder.")
     else:

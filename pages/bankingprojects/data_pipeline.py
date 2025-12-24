@@ -1,6 +1,6 @@
 """
 Data Pipeline - Step-by-Step Execution
-Converts SAS data pipeline code to Python and allows interactive execution.
+Interactive step-by-step execution of data transformation pipeline. Convert SAS code to Python and view derived variables creation.
 """
 
 import streamlit as st
@@ -66,7 +66,22 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Initialize session state
+# Reset session state when navigating to this page (for new users)
+# Track which page we were last on - if we're coming to this page fresh, reset
+current_page = st.query_params.get("project", "")
+last_page = st.session_state.get("last_page", "")
+
+# If we're on this page but weren't here before, reset state
+if current_page == "data_pipeline.py" and last_page != "data_pipeline.py":
+    # Coming to this page fresh - reset all data pipeline state
+    st.session_state.raw_data = None
+    st.session_state.current_stage = 0
+    st.session_state.stage_results = {}
+
+# Update last page tracker
+st.session_state.last_page = current_page
+
+# Initialize session state (if not already set)
 if 'raw_data' not in st.session_state:
     st.session_state.raw_data = None
 if 'current_stage' not in st.session_state:
