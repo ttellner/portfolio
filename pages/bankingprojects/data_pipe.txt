@@ -1,0 +1,562 @@
+data CREDIT.BUREAU_STAGE1_VARS;
+    set CREDIT.PD_RAW_VARIABLES;
+
+    /* Core Bureau Derived Variables */
+    bureau_score_flag           = (bureau_score < 650);
+    overdue_to_total_ratio      = overdue_accounts / total_accounts;
+    active_account_ratio        = active_accounts / total_accounts;
+    enquiries_flag              = (recent_enquiries_6m >= 3);
+
+    length risk_score_band $12;
+    if bureau_score < 600 then risk_score_band = 'Very Low';
+    else if bureau_score < 650 then risk_score_band = 'Low';
+    else if bureau_score < 700 then risk_score_band = 'Medium';
+    else if bureau_score < 750 then risk_score_band = 'High';
+    else risk_score_band = 'Very High';
+
+    high_enquiry_interaction    = (bureau_score < 650 and recent_enquiries_6m >= 3);
+    overdue_flag                = (overdue_accounts >= 2);
+    total_account_bucket        = cats('B', put(total_accounts, 1.));
+    low_risk_band_flag          = (risk_score_band in ('High', 'Very High'));
+    high_risk_band_flag         = (risk_score_band in ('Very Low', 'Low'));
+    bureau_score_bucket         = floor(bureau_score/50)*50;
+    score_enquiry_score         = bureau_score * recent_enquiries_6m;
+    accounts_gap                = total_accounts - active_accounts;
+    enquiry_to_account_ratio    = recent_enquiries_6m / total_accounts;
+    overdue_normalized          = overdue_accounts / (1 + recent_enquiries_6m);
+
+    /* Intentionally Created Duplicates by other team */
+    bureau_score_low_flag       = bureau_score_flag;         /* exact duplicate */
+    enquiry_3plus_flag          = enquiries_flag;            /* exact duplicate */
+    dpd_ratio                   = overdue_to_total_ratio;    /* renamed dup */
+    account_ratio_active        = active_account_ratio;      /* renamed dup */
+    enquiry_below650_flag      = high_enquiry_interaction;  /* logic equivalent */
+run;
+
+data CREDIT.CBS_STAGE2_VARS;
+    set CREDIT.BUREAU_STAGE1_VARS;
+
+ /* Add missing base variables manually for Stage 2 */
+    average_balance          = 60000; /* dummy default for now */
+    minimum_balance          = 8000;
+    salary_credits_3m        = 3;
+    emi_bounce_count         = 0;
+    account_tenure_months    = 24;
+
+    /* Core CBS Derived Variables */
+    emi_to_income_ratio          = emi_amount / monthly_income;
+    avg_balance_flag             = (average_balance < 5000);
+    min_balance_ratio            = minimum_balance / average_balance;
+    low_balance_month_flag       = (min_balance_ratio < 0.2);
+    salary_credit_flag           = (salary_credits_3m >= 2);
+    emi_bounce_flag              = (emi_bounce_count >= 1);
+    tenure_bucket                = floor(account_tenure_months/12);
+    high_balance_flag            = (average_balance >= 100000);
+    emi_high_flag                = (emi_amount > 0.5 * monthly_income);
+    low_income_flag              = (monthly_income < 20000);
+    emi_normalized               = emi_amount / (1 + emi_bounce_count);
+    balance_utilization_score   = average_balance / emi_amount;
+    salary_to_emi_ratio          = monthly_income / emi_amount;
+
+    /* Intentionally Created Duplicates by other department */
+    emi_income_ratio             = emi_to_income_ratio;             /* duplicate */
+    bounce_flag                  = emi_bounce_flag;                 /* duplicate */
+    emi_income_flag              = emi_high_flag;                   /* same logic */
+    high_avg_bal_flag            = high_balance_flag;               /* naming variant */
+    emi_ratio_buffer             = salary_to_emi_ratio;             /* renamed dup */
+run;
+
+data CREDIT.DPD_STAGE3_VARS;
+    set CREDIT.CBS_STAGE2_VARS;
+
+    /* Add dummy DPD values (replace later with real data if needed) */
+    dpd_m1 = 0;
+    dpd_m2 = 30;
+    dpd_m3 = 0;
+    dpd_m4 = 60;
+    dpd_m5 = 0;
+    dpd_m6 = 90;
+
+    dpd_month1 = "JAN";
+    dpd_month2 = "FEB";
+    dpd_month3 = "MAR";
+    dpd_month4 = "APR";
+    dpd_month5 = "MAY";
+    dpd_month6 = "JUN";
+
+    /* Input assumptions */
+    array dpd_arr{6} dpd_m1-dpd_m6;
+    array month_arr{6} $ dpd_month1-dpd_month6;
+    obs_months = dim(dpd_arr);
+
+    /* Core DPD Derived Variables */
+    dpd_max_days      = max(of dpd_m1-dpd_m6);
+    dpd_sum_total     = sum(of dpd_m1-dpd_m6);
+    dpd_avg           = mean(of dpd_m1-dpd_m6);
+    dpd_std_dev       = std(of dpd_m1-dpd_m6);
+
+    /* Count logic */
+    dpd_count_30_plus = 0;
+    dpd_count_60_plus = 0;
+    dpd_count_90_plus = 0;
+
+    do i = 1 to 6;
+        if dpd_arr{i} >= 30 then dpd_count_30_plus + 1;
+        if dpd_arr{i} >= 60 then dpd_count_60_plus + 1;
+        if dpd_arr{i} >= 90 then dpd_count_90_plus + 1;
+    end;
+
+    dpd_30_flag = (dpd_count_30_plus >= 1);
+    dpd_60_flag = (dpd_count_60_plus >= 1);
+    dpd_90_flag = (dpd_count_90_plus >= 1);
+
+    /* Latest and recency */
+    dpd_last_month = dpd_m6;
+    months_since_last_dpd = ifn(dpd_m6 = 0, 1, 0);
+
+    /* Rolling 3-month and trend */
+    dpd_rolling_3_months = sum(of dpd_m4-dpd_m6);
+    dpd_escalation_flag = (dpd_m4 < dpd_m5) and (dpd_m5 < dpd_m6);
+
+    /* Peak month logic */
+    dpd_peak_month = "M1";
+    do i = 1 to 6;
+        if dpd_arr{i} = dpd_max_days then dpd_peak_month = month_arr{i};
+    end;
+
+    /* Duplicate / Renamed Variables */
+    dpd_high_flag       = dpd_90_flag;
+    max_dpd_days        = dpd_max_days;
+    dpd_variance        = dpd_std_dev;
+    dpd_3m_total        = dpd_rolling_3_months;
+    recent_dpd_score    = dpd_last_month;
+run;
+data CREDIT.COLLECTION_STAGE4_VARS;
+    set CREDIT.DPD_STAGE3_VARS;
+
+    /* Stage 4: Collection & Recovery Derived Variables from real columns */
+
+    write_off_case_flag          = (write_off_flag = 1);
+    legal_action_taken_flag      = (legal_case_flag = 1);
+    broken_ptp_flag              = (broken_ptp_flag = 1);
+    ptp_honored_ratio            = ptp_kept_ratio;
+    recovery_effectiveness_score = repayment_to_due_ratio;
+
+    /* Duplicates / Renamed */
+    repayment_rate_flag          = recovery_effectiveness_score;
+    legal_case_escalated_flag    = legal_action_taken_flag;
+    ptp_failure_flag             = broken_ptp_flag;
+    ptp_ratio_score              = ptp_honored_ratio;
+run;
+
+data CREDIT.DISBURSE_STAGE5_VARS;
+    set CREDIT.COLLECTION_STAGE4_VARS;
+
+    /* ------------------------------ */
+    /* Disbursal timing               */
+    /* ------------------------------ */
+    disbursal_gap_days        = intck('day', application_date, account_open_date);
+    disbursal_gap_weeks       = intck('week', application_date, account_open_date);
+    disbursal_gap_category    = ifc(disbursal_gap_days <= 3, "Fast",
+                                ifc(disbursal_gap_days <= 7, "Moderate", "Slow"));
+    quick_disbursal_flag      = (disbursal_gap_days <= 3);
+    very_slow_disbursal_flag  = (disbursal_gap_days > 10);
+
+    /* ------------------------------ */
+    /* Channel analysis               */
+    /* ------------------------------ */
+    digital_channel_flag      = (channel in ("Online", "Mobile"));
+    in_branch_flag            = (channel = "Branch");
+
+    length channel_code $1;  /* Ensure channel_code is defined as character */
+    channel_code              = ifc(channel = "Online", "1",
+                               ifc(channel = "Mobile", "2",
+                               ifc(channel = "Branch", "3", "0")));
+
+    /* ------------------------------ */
+    /* Tenure analytics               */
+    /* ------------------------------ */
+    long_tenure_flag          = (tenure_months > 60);
+    short_term_loan_flag      = (tenure_months <= 12);
+    ultra_short_flag          = (tenure_months <= 6);
+    tenure_bucket             = floor(tenure_months / 12);
+    
+    length tenure_category $10;
+    tenure_category           = ifc(tenure_months <= 12, "Short",
+                                ifc(tenure_months <= 36, "Medium", "Long"));
+
+    /* ------------------------------ */
+    /* Requested amount analysis      */
+    /* ------------------------------ */
+    requested_amt             = requested_amount;
+    requested_bucket          = floor(requested_amt / 50000);
+    high_requested_flag       = (requested_amt > 200000);
+    low_requested_flag        = (requested_amt <= 25000);
+
+    /* ------------------------------ */
+    /* Loan lifecycle status          */
+    /* ------------------------------ */
+    active_tenure_months      = intck('month', account_open_date, today());
+    account_age_bucket        = floor(active_tenure_months / 6);
+    account_fresh_flag        = (active_tenure_months <= 3);
+    account_mature_flag       = (active_tenure_months > 24);
+
+    length loan_cycle_position $6;
+    loan_cycle_position       = ifc(active_tenure_months < (tenure_months / 2), "Early", "Late");
+
+    /* ------------------------------ */
+    /* Duplicate / Renamed Variables */
+    /* ------------------------------ */
+    fast_funding_flag         = quick_disbursal_flag;
+    channel_online_flag       = digital_channel_flag;
+    tenure_category_flag      = long_tenure_flag;
+run;
+data CREDIT.TXN_STAGE6_VARS;
+    set CREDIT.DISBURSE_STAGE5_VARS;
+
+    /* ------------------------------ */
+    /* Credit Utilization Features    */
+    /* ------------------------------ */
+    high_utilization_flag         = (credit_card_utilization_pct >= 80);
+    low_utilization_flag          = (credit_card_utilization_pct <= 20);
+    moderate_utilization_flag     = (credit_card_utilization_pct > 20 and credit_card_utilization_pct < 80);
+
+    utilization_bucket            = floor(credit_card_utilization_pct / 10);
+    utilization_score             = credit_card_utilization_pct / 100;
+
+    /* ------------------------------ */
+    /* Credit Limit Grouping          */
+    /* ------------------------------ */
+    high_credit_limit_flag        = (credit_limit >= 200000);
+    low_credit_limit_flag         = (credit_limit < 25000);
+    credit_limit_bucket           = floor(credit_limit / 50000);
+
+    length credit_segment $10;
+    credit_segment                = ifc(credit_limit < 25000, "Low",
+                                    ifc(credit_limit < 100000, "Mid", "High"));
+
+    /* ------------------------------ */
+    /* Interaction-Based Features     */
+    /* ------------------------------ */
+    utilization_to_limit_ratio    = credit_card_utilization_pct / credit_limit;
+    utilization_weighted_score    = credit_card_utilization_pct * utilization_bucket;
+
+    /* ------------------------------ */
+    /* Duplicates / Renamed           */
+    /* ------------------------------ */
+    util_flag                     = high_utilization_flag;      /* duplicate */
+    utilization_band              = utilization_bucket;         /* duplicate */
+    limit_score_flag              = high_credit_limit_flag;     /* duplicate */
+run;
+data CREDIT.TXN_STAGE7_VARS;
+    set CREDIT.TXN_STAGE6_VARS;
+
+    /* ------------------------------ */
+    /* Loan Size & Tenure Features    */
+    /* ------------------------------ */
+    loan_size_flag              = (requested_amount > 200000);
+    low_loan_flag               = (requested_amount <= 25000);
+    requested_amount_bucket     = floor(requested_amount / 50000);
+    loan_size_score             = requested_amount / monthly_income;
+    short_term_flag             = (tenure_months <= 12);
+    long_term_flag              = (tenure_months > 60);
+    tenure_bucket               = floor(tenure_months / 12);
+    requested_per_tenure        = requested_amount / (tenure_months + 1);
+    loan_burden_ratio           = (requested_amount / tenure_months) / monthly_income;
+
+    /* ------------------------------ */
+    /* Application Timeliness         */
+    /* ------------------------------ */
+    application_month           = month(application_date);
+    application_year            = year(application_date);
+    festive_season_flag         = (application_month in (10, 11, 12));
+    financial_year_start_flag   = (application_month in (4, 5));
+    end_of_year_push_flag       = (application_month = 3);
+
+    /* ------------------------------ */
+    /* Interaction Features           */
+    /* ------------------------------ */
+    tenure_to_income_ratio      = tenure_months / (monthly_income + 1);
+    amount_income_term_score    = requested_amount * tenure_months / (monthly_income + 1);
+    size_bucket_flag            = (requested_amount_bucket >= 4);
+    high_stress_combination     = (loan_burden_ratio > 0.8 and long_term_flag);
+
+    /* ------------------------------ */
+    /* Duplicates / Renamed           */
+    /* ------------------------------ */
+    loan_request_score          = loan_size_score;               /* duplicate */
+    short_loan_flag             = short_term_flag;               /* duplicate */
+    long_loan_flag              = long_term_flag;                /* alias */
+    bucketed_tenure_group       = tenure_bucket;                 /* renamed */
+    disbursal_load_flag         = high_stress_combination;       /* alias */
+    request_term_ratio_flag     = requested_per_tenure;          /* renamed */
+    loan_weighted_score         = amount_income_term_score;      /* duplicate */
+run;
+
+data CREDIT.TXN_STAGE8_VARS;
+    set CREDIT.TXN_STAGE7_VARS;
+
+    /* ------------------------------ */
+    /* Repayment Performance Flags    */
+    /* ------------------------------ */
+    clean_repayment_flag          = (dpd_30_flag = 0);
+    ever_60_plus_flag             = (dpd_60_flag = 1);
+    ever_90_plus_flag             = (dpd_90_flag = 1);
+    recent_dpd_flag               = (dpd_last_month > 0);
+    dpd_escalation_stress_flag    = dpd_escalation_flag;
+
+    /* ------------------------------ */
+    /* Recovery Effectiveness         */
+    /* ------------------------------ */
+    recovery_ratio_flag           = (repayment_to_due_ratio >= 0.8);
+    poor_recovery_flag            = (repayment_to_due_ratio < 0.5);
+    recovery_gap_score            = 1 - repayment_to_due_ratio;
+    effective_recovery_bucket     = floor(repayment_to_due_ratio * 10);
+    recovery_success_flag         = (write_off_flag = 0 and repayment_to_due_ratio >= 0.8);
+
+    /* ------------------------------ */
+    /* PTP Commitment Behavior        */
+    /* ------------------------------ */
+    ptp_broken_flag               = (broken_ptp_flag = 1);
+    ptp_kept_score                = ptp_kept_ratio;
+    ptp_compliance_flag           = (ptp_kept_ratio >= 0.7);
+    ptp_failure_history_flag      = (broken_ptp_flag = 1 and dpd_30_flag = 1);
+
+    /* ------------------------------ */
+    /* Write-Off & Legal Indicators   */
+    /* ------------------------------ */
+    writeoff_flag_combined        = write_off_flag;
+    legal_initiated_flag          = legal_case_flag;
+    legal_escalation_score        = legal_case_flag * dpd_90_flag;
+    writeoff_recovery_flag        = (write_off_flag = 1 and repayment_to_due_ratio >= 0.3);
+
+    /* ------------------------------ */
+    /* Duplicates / Renamed           */
+    /* ------------------------------ */
+    clean_pay_flag                = clean_repayment_flag;             /* duplicate */
+    ptp_repayment_flag            = ptp_compliance_flag;             /* alias */
+    dpd_escalation_flag_alias     = dpd_escalation_stress_flag;      /* renamed */
+    legal_case_escalated_flag     = legal_escalation_score;          /* alias */
+    recovery_bucket_score         = effective_recovery_bucket;       /* renamed */
+    ptp_gap_flag                  = ptp_failure_history_flag;        /* alias */
+    legal_action_flag             = legal_initiated_flag;            /* duplicate */
+run;
+
+data CREDIT.TXN_STAGE9_VARS;
+    set CREDIT.TXN_STAGE8_VARS;
+
+    /* ---------------------------------------------- */
+    /* Simulated Variables – For Testing Purposes     */
+    /* ---------------------------------------------- */
+    internal_behavior_score     = 650 + rannor(1234)*50;    /* Normally distributed around 650 */
+    risk_band_code              = 'M';                      /* Most customers in Medium risk */
+    manual_override_flag        = 0;                        /* Assume no override unless flagged */
+    behavior_stability_index    = 75 + rannor(4321)*10;     /* Slight variance around 75 */
+
+    /* ------------------------------ */
+    /* Bureau Score Buckets & Flags   */
+    /* ------------------------------ */
+    low_bureau_score_flag         = (bureau_score < 600);
+    high_bureau_score_flag        = (bureau_score >= 750);
+    bureau_score_bucket_50        = floor(bureau_score / 50) * 50;
+    bureau_score_bucket_100       = floor(bureau_score / 100) * 100;
+    score_band_segment            = ifc(bureau_score < 600, 'Low',
+                                     ifc(bureau_score < 700, 'Medium', 'High'));
+
+    /* ------------------------------ */
+    /* Behavior Score Interactions    */
+    /* ------------------------------ */
+    behavior_score_gap            = bureau_score - internal_behavior_score;
+    behavior_agreement_flag       = (abs(behavior_score_gap) < 50);
+    high_behavioral_risk_flag     = (internal_behavior_score < 550);
+    behavior_bureau_interaction   = bureau_score * internal_behavior_score;
+    avg_combined_score            = mean(bureau_score, internal_behavior_score);
+
+    /* ------------------------------ */
+    /* Risk Banding & External Flags  */
+    /* ------------------------------ */
+    internal_risk_band_flag       = (risk_band_code in ('H', 'VH'));
+    dual_low_score_flag           = (bureau_score < 600 and internal_behavior_score < 550);
+    risk_segment_score_flag       = (risk_band_code in ('H', 'VH') and bureau_score < 600);
+    external_override_flag        = (manual_override_flag = 1);
+    stable_behavior_flag          = (behavior_stability_index >= 70);
+
+    /* ------------------------------ */
+    /* Duplicates / Renamed           */
+    /* ------------------------------ */
+    risk_band_indicator           = internal_risk_band_flag;
+    behavior_risk_score           = internal_behavior_score;
+    score_agreement_flag          = behavior_agreement_flag;
+    combined_score_flag           = avg_combined_score;
+    override_manual_flag          = external_override_flag;
+    dual_risk_flag                = dual_low_score_flag;
+    score_seg_flag                = risk_segment_score_flag;
+run;
+data CREDIT.TXN_STAGE10_VARS;
+    set CREDIT.TXN_STAGE9_VARS;
+
+    /* Simulate total EMI amount if missing in source */
+    total_emi_amount = 15000 + rannor(2025)*2000;
+
+    /* ---------------------------------------------- */
+    /* Risk Ratios & Final Consolidated Scores        */
+    /* ---------------------------------------------- */
+    score_utilization_ratio     = bureau_score / (1 + credit_card_utilization_pct);
+    limit_to_income_ratio       = credit_limit / (1 + monthly_income);
+    emi_to_income_ratio         = total_emi_amount / (1 + monthly_income);
+    request_to_limit_ratio      = requested_amount / (1 + credit_limit);
+    score_to_tenure_ratio       = bureau_score / (1 + tenure_months);
+
+    /* ---------------------------------------------- */
+    /* Alert Flags – High-Risk Conditions             */
+    /* ---------------------------------------------- */
+    multiple_risk_flags         = sum(high_utilization_flag, low_bureau_score_flag, 
+                                      high_behavioral_risk_flag, dual_low_score_flag);
+
+    high_risk_alert             = (multiple_risk_flags >= 3);
+    critical_pd_trigger         = (ever_90_plus_flag = 1 and behavior_score_gap < -100);
+    low_affordability_flag      = (emi_to_income_ratio > 0.6);
+
+    /* ---------------------------------------------- */
+    /* Final Risk Profile Buckets                     */
+    /* ---------------------------------------------- */
+    risk_profile_score          = mean(avg_combined_score, behavior_stability_index);
+    risk_band_final             = ifc(risk_profile_score >= 750, "Low",
+                                 ifc(risk_profile_score >= 600, "Medium", "High"));
+
+    final_pd_flag               = (high_risk_alert or critical_pd_trigger);
+
+    /* ---------------------------------------------- */
+    /* Duplicates / Alternate Versions                */
+    /* ---------------------------------------------- */
+    alert_flag                  = high_risk_alert;
+    affordability_flag          = low_affordability_flag;
+    risk_bucket                 = risk_band_final;
+run;
+
+
+/* Define the SCORE_BAND format */
+proc format;
+    value score_band
+        low-649 = 'Low'
+        650-699 = 'Medium'
+        700-high = 'High';
+run;
+
+/* Stage 11.1 – Generate 30 Meaningful Derived Variables */
+data CREDIT.TXN_STAGE10_VARS;
+    set CREDIT.TXN_STAGE10_VARS;
+
+    /* ---------- DPD Behaviour Variables ---------- */
+    dpd_max_days   = max(of dpd_m1-dpd_m12);      /* Max DPD observed */
+    dpd_avg        = mean(of dpd_m1-dpd_m12);     /* Avg DPD */
+    dpd_variance   = var(of dpd_m1-dpd_m12);      /* Variance of DPD */
+
+    /* Count of 30+, 60+, 90+ months */
+    dpd_count_30_plus=0; dpd_count_60_plus=0; dpd_count_90_plus=0;
+    array dpd_m[12] dpd_m1-dpd_m12;
+    do i=1 to 12;
+       if dpd_m[i] >= 30 then dpd_count_30_plus + 1;
+       if dpd_m[i] >= 60 then dpd_count_60_plus + 1;
+       if dpd_m[i] >= 90 then dpd_count_90_plus + 1;
+    end;
+
+    /* Last 3 months total DPD */
+    dpd_3m_total = sum(of dpd_m10-dpd_m12);
+
+    /* ---------- EMI & Affordability ---------- */
+    emi_bounce_flag       = (emi_bounce_count >= 1);
+    emi_income_flag       = (emi_amount > 0.5 * monthly_income);
+    emi_ratio_buffer      = monthly_income / emi_amount;
+    limit_to_income_ratio = credit_limit / (1 + monthly_income);
+    low_affordability_flag= (emi_amount / (1 + monthly_income) > 0.6);
+
+    /* ---------- Risk & Alerts ---------- */
+    high_risk_alert    = (dpd_count_60_plus >= 2 or emi_income_flag=1);
+    affordability_flag = (emi_ratio_buffer < 2);
+    critical_pd_trigger= (dpd_max_days >= 120);
+    fast_funding_flag  = (application_date - account_open_date <= 7);
+
+    /* ---------- Salary Credit Behaviour ---------- */
+    salary_credit_regular = (salary_credits_3m >= 3);
+
+    /* ---------- Behavioural Score ---------- */
+    behavioural_score = (bureau_score * 0.7) + ((100 - dpd_avg) * 0.3);
+    risk_score_band   = put(bureau_score,score_band.);
+
+    /* ---------- Account Ratios ---------- */
+    account_ratio_active   = active_accounts / total_accounts;
+    overdue_to_total_ratio = overdue_accounts / total_accounts;
+    active_account_ratio   = active_accounts / total_accounts;
+
+    /* ---------- Enquiry Behaviour ---------- */
+    enquiries_flag           = (recent_enquiries_6m > 2);
+    high_enquiry_interaction = (recent_enquiries_6m >= 4 and bureau_score < 650);
+
+    /* ---------- Loan Flags ---------- */
+    loan_size_flag       = (requested_amount >= 500000);
+    limit_score_flag     = (credit_limit > 3 * monthly_income);
+
+    /* ---------- POS & Mobile Behaviour ---------- */
+    pos_transaction_volume = rand("integer",50,500);
+    mobile_login_frequency = rand("integer",1,30);
+
+    drop i;
+run;
+
+
+/* Stage 11.1 – Generate Final Default Flag */
+
+/* The output table will be CREDIT.TXN_STAGE_FINAL_MODEL */
+/* The base table will be CREDIT.TXN_STAGE10_VARS */
+
+data CREDIT.TXN_STAGE_FINAL_MODEL;
+    set CREDIT.TXN_STAGE10_VARS;
+
+    /* Check for complete observation window */
+    array obs_dpd[12] dpd_m1-dpd_m12;
+    valid_obs = 1;
+    do i=1 to 12;
+        if missing(obs_dpd[i]) then valid_obs = 0;
+    end;
+
+    /* Check for complete performance window */
+    array perf_dpd[6] dpd_f1-dpd_f6;
+    valid_perf = 1;
+    do j=1 to 6;
+        if missing(perf_dpd[j]) then valid_perf = 0;
+    end;
+
+    /* Generate default_flag */
+    if valid_obs and valid_perf then do;
+        if max(of dpd_f1-dpd_f6) >= 90 then default_flag = 1;  /* Defaulter */
+        else default_flag = 0;                                /* Non-defaulter */
+        modeling_population = 1;
+    end;
+    else do;
+        default_flag = .;              /* Not eligible due to incomplete data */
+        modeling_population = 0;
+    end;
+
+    drop i j;
+run;
+
+/* Keep only valid modeling population for final dataset */
+data CREDIT.TXN_STAGE_FINAL_MODEL;
+    set CREDIT.TXN_STAGE_FINAL_MODEL;
+    where modeling_population = 1;
+run;
+proc means data=CREDIT.TXN_STAGE_FINAL_MODEL n nmiss;
+    var _numeric_;
+    output out=NUM_MISS_SUM;
+run;
+data NUM_MISS_PCT;
+    set NUM_MISS;
+    length Variable $32;
+    retain Total;
+    
+    if _N_ = 1 then Total = input(scan(_LABEL_, 2, '='), best.);
+    Variable = _NAME_;
+    Pct_Missing = COL1 / Total * 100;
+    keep Variable Pct_Missing;
+run;
