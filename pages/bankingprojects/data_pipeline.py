@@ -1,6 +1,7 @@
 """
 Data Pipeline - Step-by-Step Execution
-Interactive step-by-step execution of data transformation pipeline. Convert SAS code to Python and view derived variables creation.
+Interactive step-by-step execution of data transformation pipeline. Code is based on a SAS-based pipeline created by Sameer Shaikh in:
+"SAS Credit Risk Modelling - A to Z for PD Models". Data has also been created by Sameer Shaikh for the book.
 """
 
 import streamlit as st
@@ -385,8 +386,9 @@ def main():
     st.markdown('<h1 class="main-header">Data Pipeline - Step by Step Execution</h1>', unsafe_allow_html=True)
     
     st.markdown("""
-    This application converts SAS data pipeline code to Python and allows you to execute each stage 
-    step-by-step, viewing the code and output at each stage.
+    This application allows you to execute each stage of an example data pipeline 
+    step-by-step, viewing the code and output at each stage. Due to storage and compute constraints,
+    the "database" is a csv file with 37 primary features that are used to derive ~ 231 new features.
     
     **Instructions:**
     1. Load the raw data file (PD_RAW_VARIABLES.csv)
@@ -399,7 +401,7 @@ def main():
     
     # Sidebar for data loading and navigation
     with st.sidebar:
-        st.header("📊 Data Loading")
+        st.header("Data Loading")
         
         if st.button("Load Raw Data", type="primary"):
             with st.spinner("Loading data..."):
@@ -408,13 +410,13 @@ def main():
                     st.session_state.raw_data = data
                     st.session_state.current_stage = 0
                     st.session_state.stage_results = {}
-                    st.success(f"✅ Loaded {len(data):,} rows and {len(data.columns)} columns")
+                    st.success(f"Loaded {len(data):,} rows and {len(data.columns)} columns")
                     st.rerun()
         
         if st.session_state.raw_data is not None:
-            st.success(f"✅ Data loaded: {len(st.session_state.raw_data):,} rows")
+            st.success(f"Data loaded: {len(st.session_state.raw_data):,} rows")
             st.markdown("---")
-            st.header("🎯 Stage Navigation")
+            st.header("Stage Navigation")
             
             for i, stage in enumerate(STAGES):
                 status = "✅" if i < st.session_state.current_stage else "⏳"
@@ -425,16 +427,16 @@ def main():
                     st.rerun()
             
             st.markdown("---")
-            if st.button("🔄 Reset All Stages"):
+            if st.button("Reset All Stages"):
                 st.session_state.current_stage = 0
                 st.session_state.stage_results = {}
                 st.rerun()
         else:
-            st.info("👆 Please load the raw data first")
+            st.info("Please load the raw data first")
     
     # Main content area
     if st.session_state.raw_data is None:
-        st.warning("⚠️ Please load the raw data file using the button in the sidebar.")
+        st.warning("Please load the raw data file using the button in the sidebar.")
         return
     
     # Display current stage
