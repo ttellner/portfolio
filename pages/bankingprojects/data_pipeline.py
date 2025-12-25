@@ -1,7 +1,6 @@
 """
 Data Pipeline - Step-by-Step Execution
-Interactive step-by-step execution of data transformation pipeline. Code is based on a SAS-based pipeline created by Sameer Shaikh in:
-"SAS Credit Risk Modelling - A to Z for PD Models". Data has also been created by Sameer Shaikh for the book.
+Interactive step-by-step execution of data transformation pipeline. Code is based on a SAS-based pipeline created by Sameer Shaikh in: "SAS Credit Risk Modelling - A to Z for PD Models". Data has also been created by Sameer Shaikh for the book.
 """
 
 import streamlit as st
