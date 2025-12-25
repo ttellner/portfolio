@@ -1,0 +1,540 @@
+"""
+Variable Metadata Analysis
+Analyzes variable metadata, missing values, duplicates, and data quality from final pipeline output.
+"""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import sys
+
+# Add current directory to path for imports
+current_dir = Path(__file__).parent.absolute()
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
+
+from var_meta_functions import (
+    step1_extract_metadata,
+    step2_transpose_missing,
+    step3_calculate_pct_missing,
+    step4_high_missing_vars,
+    step4_categorical_frequencies,
+    step5_descriptive_stats,
+    step6_invalid_categories,
+    step7_duplicate_columns,
+    step7_get_duplicate_list,
+    step8_drop_duplicates,
+    step8_get_hardcoded_list,
+    step9_orphan_records
+)
+
+# Page configuration
+st.set_page_config(
+    page_title="Variable Metadata Analysis",
+    page_icon="",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .stage-header {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        padding: 0.5rem;
+        background-color: #ecf0f1;
+        border-left: 4px solid #3498db;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Reset session state when navigating to this page
+current_page = st.query_params.get("project", "")
+last_page = st.session_state.get("last_page_var_meta", "")
+
+if current_page == "var_metadata_analysis.py" and last_page != "var_metadata_analysis.py":
+    # Coming to this page fresh - reset state
+    if 'input_data' in st.session_state:
+        del st.session_state.input_data
+    if 'step_results' in st.session_state:
+        del st.session_state.step_results
+    if 'current_step' in st.session_state:
+        del st.session_state.current_step
+
+st.session_state.last_page_var_meta = current_page
+
+# Initialize session state
+if 'input_data' not in st.session_state:
+    st.session_state.input_data = None
+if 'current_step' not in st.session_state:
+    st.session_state.current_step = 0
+if 'step_results' not in st.session_state:
+    st.session_state.step_results = {}
+
+# Step definitions with descriptions and code snippets
+STEPS = [
+    {
+        'number': 1,
+        'name': 'Extract Variable Metadata',
+        'description': 'Extracts metadata for all numeric variables, calculating count and missing count.',
+        'function': step1_extract_metadata,
+        'code': '''
+# Extract metadata for numeric variables
+numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+
+summary_data = {
+    'Variable': numeric_cols,
+    'N': [df[col].count() for col in numeric_cols],
+    'NMiss': [df[col].isnull().sum() for col in numeric_cols]
+}
+result = pd.DataFrame(summary_data)
+'''
+    },
+    {
+        'number': 2,
+        'name': 'Transpose Missing Summary',
+        'description': 'Transposes the metadata to have variables as rows.',
+        'function': step2_transpose_missing,
+        'code': '''
+# Transpose missing summary
+result = df_metadata.rename(columns={'NMiss': 'COL1'})
+result = result[['Variable', 'COL1']].copy()
+'''
+    },
+    {
+        'number': 3,
+        'name': 'Calculate % Missing',
+        'description': 'Calculates percentage of missing values for each variable.',
+        'function': step3_calculate_pct_missing,
+        'code': '''
+# Calculate percentage missing
+result['Pct_Missing'] = (result['COL1'] / total_n * 100).round(2)
+result = result[['Variable', 'Pct_Missing']].copy()
+'''
+    },
+    {
+        'number': 4,
+        'name': 'High Missing Variables & Categorical Frequencies',
+        'description': 'Identifies variables with >30% missing values and generates frequency distributions for categorical variables.',
+        'function': None,  # Special handling needed
+        'code': '''
+# High missing variables
+high_missing = df_pct_missing[df_pct_missing['Pct_Missing'] > 30].copy()
+
+# Categorical frequencies
+cat_vars = ['gender', 'marital_status', 'residence_type']
+freq_tables = {}
+for var in cat_vars:
+    freq_df = df[var].value_counts(dropna=False).reset_index()
+    freq_tables[var] = freq_df
+'''
+    },
+    {
+        'number': 5,
+        'name': 'Descriptive Statistics & Range Checks',
+        'description': 'Calculates descriptive statistics (n, mean, std, min, max) for selected risk variables.',
+        'function': step5_descriptive_stats,
+        'code': '''
+# Descriptive statistics
+vars_list = ['bureau_score', 'emi_to_income_ratio', 'monthly_income']
+stats_data = {
+    'Variable': vars_list,
+    'N': [df[var].count() for var in vars_list],
+    'Mean': [df[var].mean() for var in vars_list],
+    'Std': [df[var].std() for var in vars_list],
+    'Min': [df[var].min() for var in vars_list],
+    'Max': [df[var].max() for var in vars_list]
+}
+result = pd.DataFrame(stats_data)
+'''
+    },
+    {
+        'number': 6,
+        'name': 'Invalid Categories Check',
+        'description': 'Performs frequency checks on categorical variables to detect misspellings and invalid values.',
+        'function': step6_invalid_categories,
+        'code': '''
+# Invalid categories check
+cat_vars = ['gender', 'marital_status', 'residence_type']
+freq_tables = {}
+for var in cat_vars:
+    freq_df = df[var].value_counts(dropna=False).reset_index()
+    freq_tables[var] = freq_df
+'''
+    },
+    {
+        'number': 7,
+        'name': 'Duplicate Column Detection',
+        'description': 'Detects duplicate columns by creating MD5 hashes of column values. Returns groups of duplicate columns.',
+        'function': step7_duplicate_columns,
+        'code': '''
+# Duplicate column detection using MD5 hashing
+df_sample = df.sample(n=min(1000, len(df)))
+df_transposed = df_sample.T
+
+# Create hash digest for each column
+def create_hash(row):
+    row_str = ''.join([str(val) for val in row.values if pd.notna(val)])
+    return hashlib.md5(row_str.encode()).hexdigest()
+
+df_transposed['digest'] = df_transposed.apply(create_hash, axis=1)
+
+# Group by digest to find duplicates
+# Returns dataframe with group_id and column_name
+'''
+    },
+    {
+        'number': 8,
+        'name': 'Drop Duplicate Columns',
+        'description': 'Drops duplicate columns identified in Step 7. Compares Step 7 output with hardcoded list and uses Step 7 output if they match.',
+        'function': step8_drop_duplicates,
+        'code': '''
+# Drop duplicate columns
+# Uses list from Step 7 if it matches hardcoded list,
+# otherwise uses Step 7's output
+result = df.drop(columns=columns_to_drop, errors='ignore')
+'''
+    },
+    {
+        'number': 9,
+        'name': 'Check for Orphan Records',
+        'description': 'Finds records that don\'t have a match in customer master table (if available).',
+        'function': step9_orphan_records,
+        'code': '''
+# Check for orphan records
+# Left join with customer master
+merged = df.merge(
+    customer_master[['cust_id']],
+    on='cust_id',
+    how='left',
+    indicator=True
+)
+orphan_records = merged[merged['_merge'] == 'left_only']
+'''
+    }
+]
+
+
+def load_data_from_file():
+    """Load data from CSV file."""
+    data_file = current_dir / "data" / "PD_RAW_VARIABLES.csv"
+    if data_file.exists():
+        return pd.read_csv(data_file)
+    else:
+        st.error(f"Default data file not found: {data_file}")
+        return None
+
+
+def display_step_info(step):
+    """Display step information and code."""
+    st.markdown(f'<div class="stage-header">Step {step["number"]}: {step["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(f"**Description:** {step['description']}")
+    
+    st.markdown("**Python Code:**")
+    st.code(step['code'], language='python')
+
+
+def main():
+    """Main application."""
+    st.markdown('<h1 class="main-header">Variable Metadata Analysis</h1>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    This application analyzes variable metadata, missing values, duplicates, and data quality.
+    It takes the final output from the data pipeline and performs various quality checks.
+    
+    **Instructions:**
+    1. Load the final data from the data pipeline (or upload a CSV file)
+    2. Execute each step sequentially
+    3. View the code and output for each step
+    4. Review duplicate column detection and removal
+    """)
+    
+    st.markdown("---")
+    
+    # Sidebar for data loading and navigation
+    with st.sidebar:
+        st.header("Data Loading")
+        
+        # Option to upload file
+        uploaded_file = st.file_uploader("Upload CSV File", type=['csv'])
+        
+        if uploaded_file is not None:
+            try:
+                data = pd.read_csv(uploaded_file)
+                st.session_state.input_data = data
+                st.success(f"Loaded {len(data):,} rows and {len(data.columns)} columns")
+            except Exception as e:
+                st.error(f"Error loading file: {e}")
+        
+        # Or load from default location
+        if st.button("Load Default Data", type="primary"):
+            with st.spinner("Loading data..."):
+                data = load_data_from_file()
+                if data is not None:
+                    st.session_state.input_data = data
+                    st.session_state.current_step = 0
+                    st.session_state.step_results = {}
+                    st.success(f"Loaded {len(data):,} rows and {len(data.columns)} columns")
+                    st.rerun()
+        
+        if st.session_state.input_data is not None:
+            st.success(f"Data loaded: {len(st.session_state.input_data):,} rows")
+            st.markdown("---")
+            st.header("Step Navigation")
+            
+            for i, step in enumerate(STEPS):
+                status = "✅" if i < st.session_state.current_step else "⏳"
+                if st.button(f"{status} Step {step['number']}: {step['name']}", 
+                            key=f"nav_{i}",
+                            disabled=(i > st.session_state.current_step)):
+                    st.session_state.current_step = i
+                    st.rerun()
+            
+            st.markdown("---")
+            if st.button("Reset All Steps"):
+                st.session_state.current_step = 0
+                st.session_state.step_results = {}
+                st.rerun()
+        else:
+            st.info("Please load data first")
+    
+    # Main content area
+    if st.session_state.input_data is None:
+        st.warning("Please load data using the sidebar.")
+        return
+    
+    # Display current step
+    current_step_idx = st.session_state.current_step
+    step = STEPS[current_step_idx]
+    
+    # Step information
+    display_step_info(step)
+    
+    st.markdown("---")
+    
+    # Execute step button
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        execute_disabled = current_step_idx in st.session_state.step_results
+        if st.button("Execute Step", type="primary", disabled=execute_disabled):
+            with st.spinner(f"Executing Step {step['number']}..."):
+                try:
+                    input_df = st.session_state.input_data.copy()
+                    
+                    # Special handling for Step 4
+                    if step['number'] == 4:
+                        # Need results from Step 3
+                        if 2 not in st.session_state.step_results:
+                            st.error("Please execute Step 3 first to get missing percentage data.")
+                        else:
+                            step3_result = st.session_state.step_results[2]
+                            high_missing = step4_high_missing_vars(step3_result, threshold=30.0)
+                            
+                            cat_vars = ['gender', 'marital_status', 'residence_type']
+                            freq_tables = step4_categorical_frequencies(input_df, cat_vars)
+                            
+                            result = {
+                                'high_missing': high_missing,
+                                'freq_tables': freq_tables
+                            }
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                    
+                    # Special handling for Step 7
+                    elif step['number'] == 7:
+                        result = step7_duplicate_columns(input_df, sample_size=1000)
+                        st.session_state.step_results[current_step_idx] = result
+                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                        st.success(f"Step {step['number']} executed successfully!")
+                        st.rerun()
+                    
+                    # Special handling for Step 8
+                    elif step['number'] == 8:
+                        # Get duplicate list from Step 7
+                        if 6 not in st.session_state.step_results:
+                            st.error("Please execute Step 7 first to detect duplicate columns.")
+                        else:
+                            step7_result = st.session_state.step_results[6]
+                            step7_duplicate_list = step7_get_duplicate_list(step7_result)
+                            hardcoded_list = step8_get_hardcoded_list()
+                            
+                            # Compare lists (normalize by sorting and converting to sets)
+                            step7_set = set(step7_duplicate_list)
+                            hardcoded_set = set(hardcoded_list)
+                            
+                            # Use Step 7's output if it matches hardcoded list
+                            if step7_set == hardcoded_set:
+                                columns_to_drop = step7_duplicate_list
+                                st.info(f"Step 7 output matches hardcoded list. Using Step 7's output ({len(columns_to_drop)} columns).")
+                            else:
+                                # Show difference
+                                only_in_step7 = step7_set - hardcoded_set
+                                only_in_hardcoded = hardcoded_set - step7_set
+                                
+                                if only_in_step7 or only_in_hardcoded:
+                                    st.warning(f"Step 7 output differs from hardcoded list. Using Step 7's output.")
+                                    st.write(f"Only in Step 7: {list(only_in_step7)}")
+                                    st.write(f"Only in hardcoded: {list(only_in_hardcoded)}")
+                                columns_to_drop = step7_duplicate_list
+                            
+                            result = step8_drop_duplicates(input_df, columns_to_drop)
+                            st.session_state.step_results[current_step_idx] = {
+                                'cleaned_data': result,
+                                'columns_dropped': columns_to_drop
+                            }
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns.")
+                            st.rerun()
+                    
+                    # Special handling for Step 9
+                    elif step['number'] == 9:
+                        # Step 9 requires customer master (optional)
+                        result = step9_orphan_records(input_df, customer_master=None)
+                        st.session_state.step_results[current_step_idx] = result
+                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                        st.success(f"Step {step['number']} executed successfully!")
+                        st.rerun()
+                    
+                    # Standard steps
+                    elif step['function'] is not None:
+                        # Steps 1-3 need special handling for dependencies
+                        if step['number'] == 1:
+                            result = step['function'](input_df)
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                        
+                        elif step['number'] == 2:
+                            if 0 not in st.session_state.step_results:
+                                st.error("Please execute Step 1 first.")
+                            else:
+                                step1_result = st.session_state.step_results[0]
+                                result = step['function'](step1_result)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully!")
+                                st.rerun()
+                        
+                        elif step['number'] == 3:
+                            if 1 not in st.session_state.step_results or 0 not in st.session_state.step_results:
+                                st.error("Please execute Steps 1 and 2 first.")
+                            else:
+                                step2_result = st.session_state.step_results[1]
+                                step1_result = st.session_state.step_results[0]
+                                total_n = step1_result._total_n
+                                result = step['function'](step2_result, total_n)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully!")
+                                st.rerun()
+                        
+                        elif step['number'] == 5:
+                            vars_list = ['bureau_score', 'emi_to_income_ratio', 'monthly_income']
+                            result = step['function'](input_df, vars_list)
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                        
+                        elif step['number'] == 6:
+                            cat_vars = ['gender', 'marital_status', 'residence_type']
+                            result = step['function'](input_df, cat_vars)
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                
+                except Exception as e:
+                    st.error(f"Error executing step: {str(e)}")
+                    st.exception(e)
+    
+    # Display results if step has been executed
+    if current_step_idx in st.session_state.step_results:
+        result = st.session_state.step_results[current_step_idx]
+        
+        st.markdown("**Results:**")
+        
+        # Step 4 special display
+        if step['number'] == 4:
+            st.subheader("Variables with >30% Missing")
+            if isinstance(result, dict) and 'high_missing' in result:
+                if not result['high_missing'].empty:
+                    st.dataframe(result['high_missing'], use_container_width=True)
+                else:
+                    st.info("No variables with >30% missing values.")
+            
+            st.subheader("Categorical Variable Frequencies")
+            if isinstance(result, dict) and 'freq_tables' in result:
+                for var, freq_df in result['freq_tables'].items():
+                    st.write(f"**{var}:**")
+                    st.dataframe(freq_df, use_container_width=True)
+        
+        # Step 8 special display
+        elif step['number'] == 8:
+            if isinstance(result, dict) and 'cleaned_data' in result:
+                st.subheader(f"Columns Dropped: {len(result['columns_dropped'])}")
+                st.write(", ".join(result['columns_dropped']))
+                
+                st.subheader("Cleaned Data Summary")
+                cleaned_df = result['cleaned_data']
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Rows", f"{len(cleaned_df):,}")
+                with col2:
+                    st.metric("Columns", f"{len(cleaned_df.columns):,}")
+                
+                st.subheader("Data Preview (First 10 Rows)")
+                st.dataframe(cleaned_df.head(10), use_container_width=True)
+        
+        # Step 9 special display
+        elif step['number'] == 9:
+            if isinstance(result, pd.DataFrame):
+                if not result.empty:
+                    st.warning(f"Found {len(result)} orphan records.")
+                    st.dataframe(result, use_container_width=True)
+                else:
+                    st.info("No orphan records found (or customer master not available).")
+        
+        # Standard display for other steps
+        else:
+            if isinstance(result, pd.DataFrame):
+                st.dataframe(result, use_container_width=True)
+            elif isinstance(result, dict):
+                for key, value in result.items():
+                    st.write(f"**{key}:**")
+                    if isinstance(value, pd.DataFrame):
+                        st.dataframe(value, use_container_width=True)
+                    else:
+                        st.write(value)
+            else:
+                st.write(result)
+    else:
+        st.info("Click 'Execute Step' to run this step and view the results.")
+    
+    # Progress indicator
+    st.markdown("---")
+    st.markdown("### Analysis Progress")
+    completed = len(st.session_state.step_results)
+    total = len(STEPS)
+    progress = completed / total
+    st.progress(progress)
+    st.caption(f"Completed: {completed} / {total} steps ({progress*100:.1f}%)")
+
+if __name__ == "__main__":
+    main()
+

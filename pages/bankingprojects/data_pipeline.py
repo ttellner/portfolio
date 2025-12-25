@@ -522,7 +522,7 @@ def main():
     # Network Graph Section
     st.markdown("---")
     st.markdown("### Primary Variable Network Graph")
-    st.markdown("View the network graph showing relationships between primary variables.")
+    st.markdown("View the network graph showing relationships between primary variables. You can zoom in and click on nodes to highlight relationships.")
     
     # Initialize session state for network graph visibility
     if 'show_network_graph' not in st.session_state:

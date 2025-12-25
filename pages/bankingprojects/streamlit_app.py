@@ -139,7 +139,7 @@ def main():
                 # Reset target column if it's not in the new data
                 if st.session_state.target_column not in training_data.columns:
                     st.session_state.target_column = None
-                st.success(f"✅ {len(training_data)} records loaded")
+                st.success(f"{len(training_data)} records loaded")
             except Exception as e:
                 st.error(f"Error loading training data: {e}")
         elif st.session_state.original_training_data is None:
@@ -184,7 +184,7 @@ def main():
                 st.session_state.original_new_applicant_data = new_applicant_data.copy()
                 st.session_state.new_applicant_data = new_applicant_data
                 st.session_state.using_uploaded_testing = True  # Mark as uploaded
-                st.success(f"✅ {len(new_applicant_data)} records loaded")
+                st.success(f"{len(new_applicant_data)} records loaded")
             except Exception as e:
                 st.error(f"Error loading testing data: {e}")
         elif st.session_state.original_new_applicant_data is None:
@@ -251,7 +251,7 @@ def main():
             st.markdown("---")
         
         # Model selection
-        st.subheader("🤖 Model Selection")
+        st.subheader("Model Selection")
         model_type = st.selectbox(
             "Select Model Type",
             ['logistic_regression', 'random_forest', 'gradient_boosting', 'decision_tree', 'cnn'],
@@ -260,7 +260,7 @@ def main():
         )
         
         # Model-specific parameters
-        st.subheader("🔧 Model Parameters")
+        st.subheader("Model Parameters")
         
         if model_type == 'logistic_regression':
             max_iter = st.number_input("Max Iterations", min_value=100, max_value=10000, value=1000, step=100)
@@ -308,7 +308,7 @@ def main():
         st.markdown("---")
         
         # Run button
-        run_button = st.button("🚀 Run Scorecard Pipeline", type="primary", use_container_width=True)
+        run_button = st.button("Run Scorecard Pipeline", type="primary", use_container_width=True)
         
         st.markdown("---")
         
@@ -356,7 +356,7 @@ def main():
             except Exception as e:
                 st.warning(f"Could not reload default testing file: {e}")
         
-        st.success("✅ All uploaded data and results have been deleted. Default data files are preserved.")
+        st.success("All uploaded data and results have been deleted. Default data files are preserved.")
         st.rerun()
     
     # Apply column exclusions to data when columns_to_exclude changes
@@ -379,19 +379,19 @@ def main():
     if run_button:
         # Check if training data is available
         if st.session_state.training_data is None or len(st.session_state.training_data) == 0:
-            st.error("❌ Please upload training data first.")
+            st.error("Please upload training data first.")
             return
         
         # Get target column
         if st.session_state.target_column is None:
-            st.error("❌ Please select a target column.")
+            st.error("Please select a target column.")
             return
         
         target = st.session_state.target_column
         
         # Verify target column exists in data
         if target not in st.session_state.training_data.columns:
-            st.error(f"❌ Target column '{target}' not found in data. Please select a valid column.")
+            st.error(f"Target column '{target}' not found in data. Please select a valid column.")
             return
         
         # Run pipeline
@@ -412,7 +412,7 @@ def main():
                     smote_k_neighbors=5
                 )
                 st.session_state.results = results
-                st.success("✅ Pipeline completed successfully!")
+                st.success("Pipeline completed successfully!")
         except Exception as e:
             st.error(f"Error running pipeline: {e}")
             st.exception(e)
@@ -818,15 +818,15 @@ def display_results(results):
     """Display results in Streamlit."""
     
     st.markdown("---")
-    st.header("📈 Results")
+    st.header("Results")
     
     # Create tabs for different views
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📊 Training Data Summary", 
-        "📋 New Applicants Summary",
-        "📉 Visualizations",
-        "🔍 Feature Impact Analysis",
-        "💾 Download Results"
+        "Training Data Summary", 
+        "New Applicants Summary",
+        "Visualizations",
+        "Feature Impact Analysis",
+        "Download Results"
     ])
     
     with tab1:
@@ -1093,7 +1093,7 @@ def display_results(results):
                             # Download button for False Positives
                             fp_csv = fp_df.to_csv(index=False)
                             st.download_button(
-                                label="📥 Download False Positives (CSV)",
+                                label="Download False Positives (CSV)",
                                 data=fp_csv,
                                 file_name="false_positives.csv",
                                 mime="text/csv"
@@ -1114,7 +1114,7 @@ def display_results(results):
                             # Download button for False Negatives
                             fn_csv = fn_df.to_csv(index=False)
                             st.download_button(
-                                label="📥 Download False Negatives (CSV)",
+                                label="Download False Negatives (CSV)",
                                 data=fn_csv,
                                 file_name="false_negatives.csv",
                                 mime="text/csv"
@@ -1152,7 +1152,7 @@ def display_results(results):
             st.subheader("Download Feature Impact Results")
             impact_csv = impact_df.to_csv(index=False)
             st.download_button(
-                label="📥 Download Feature Impact Analysis (CSV)",
+                label="Download Feature Impact Analysis (CSV)",
                 data=impact_csv,
                 file_name="feature_impact_analysis.csv",
                 mime="text/csv"
@@ -1167,7 +1167,7 @@ def display_results(results):
         st.subheader("Training Data Results")
         training_csv = results['training_scored'].to_csv(index=False)
         st.download_button(
-            label="📥 Download Training Scored Data (CSV)",
+            label="Download Training Scored Data (CSV)",
             data=training_csv,
             file_name="training_scored.csv",
             mime="text/csv"
@@ -1178,7 +1178,7 @@ def display_results(results):
             st.subheader("New Applicants Results")
             new_applicant_csv = results['new_applicant_scored'].to_csv(index=False)
             st.download_button(
-                label="📥 Download New Applicants Scored Data (CSV)",
+                label="Download New Applicants Scored Data (CSV)",
                 data=new_applicant_csv,
                 file_name="new_applicants_scored.csv",
                 mime="text/csv"

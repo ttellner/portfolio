@@ -1,0 +1,184 @@
+/* Step 1: Extract SAS Variable Metadata using PROC CONTENTS */
+
+proc means data=CREDIT.TXN_STAGE_FINAL_MODEL n nmiss;
+    var _numeric_;
+    output out=NUM_MISS_SUM;
+run;
+
+/* Step 2: Transpose Missing Summary */
+
+proc transpose data=NUM_MISS_SUM out=NUM_MISS(drop=_NAME_);
+    var _numeric_;
+run;
+
+/* Step 3: Calculate % Missing */
+
+data NUM_MISS_PCT;
+    set NUM_MISS;
+    length Variable $32;
+    retain Total;
+    
+    if _N_ = 1 then Total = input(scan(_LABEL_, 2, '='), best.);
+    Variable = _NAME_;
+    Pct_Missing = COL1 / Total * 100;
+    keep Variable Pct_Missing;
+run;
+
+/* Step 4: Print Variables with >30% Missing */
+
+proc print data=NUM_MISS_PCT;
+    where Pct_Missing > 30;
+    title "Variables with >30% Missing";
+run; 
+
+title "Frequency Distribution – Gender";
+proc freq data= CREDIT.TXN_STAGE_FINAL_MODEL;
+  tables gender / missing nocum nopercent;
+run;
+
+title "Frequency Distribution – Marital Status";
+proc freq data= CREDIT.TXN_STAGE_FINAL_MODEL;
+  tables marital_status / missing nocum nopercent;
+run;
+
+title "Frequency Distribution – Residence Type";
+proc freq data= CREDIT.TXN_STAGE_FINAL_MODEL;
+  tables residence_type / missing nocum nopercent;
+run;
+
+/* Step 5: Desc Stats and Range Checks */
+
+proc means data= CREDIT.TXN_STAGE_FINAL_MODEL n mean std min max maxdec=2;
+    var bureau_score emi_to_income_ratio monthly_income;
+    title "Descriptive Statistics for Selected Risk Variables";
+run;
+
+/* Step 6: Invalid Categories */
+
+%let cat_vars = gender marital_status residence_type;
+
+%macro freq_check;
+    %do i = 1 %to %sysfunc(countw(&cat_vars));
+        %let var = %scan(&cat_vars, &i);
+        
+        title "Frequency Check for &var (detect misspellings, invalids)";
+        proc freq data= CREDIT.TXN_STAGE_FINAL_MODEL;
+            tables &var / missing nocum nopercent;
+        run;
+    %end;
+%mend;
+
+%freq_check;
+
+/* Step 7: Duplicate Column Detection */
+
+data txn_sample;
+    set credit.txn_stage_final_model(obs=1000);
+run;
+
+proc transpose data=txn_sample out=txn_transposed name=column_name;
+run;
+
+data hashed_columns;
+    set txn_transposed;
+    length digest $32.;
+
+    /* Create hash from all data in the transposed row */
+    digest = md5(cats(of col1-col1000));
+    keep column_name digest;
+run;
+
+proc sort data=hashed_columns;
+    by digest;
+run;
+
+data duplicate_columns_final;
+    set hashed_columns;
+    by digest;
+    retain group_id 0;
+    if first.digest then group_id + 1;
+run;
+
+proc print data=duplicate_columns_final noobs;
+    var group_id column_name;
+    title "Final Duplicate Columns Based on Full Hash Digest";
+run;
+
+/* Step 8: Drop Duplicate Columns */
+
+data credit.txn_stage_final_model_cleaned;
+    set credit.txn_stage_final_model;
+
+    drop 
+        repayment_rate_flag
+        recovery_effectiveness_score
+        low_credit_limit_flag
+        low_loan_flag
+        ptp_honored_ratio
+        ptp_ratio_score
+        ptp_kept_score
+        combined_score_flag
+        loan_weighted_score
+        dpd_variance
+        emi_income_flag
+        dpd_avg
+        credit_limit_bucket
+        requested_amount_bucket
+        dpd_max_days
+        dpd_last_month
+        max_dpd_days
+        recent_dpd_score
+        fast_funding_flag
+        account_ratio_active
+        dpd_3m_total
+        affordability_flag
+        dpd_ratio
+        high_credit_limit_flag
+        limit_score_flag
+        loan_size_flag
+        size_bucket_flag
+        enquiry_below650_flag
+        dpd_f2
+        dpd_f3
+        dpd_f4
+        dpd_f5
+        dpd_f6
+
+        credit_limit
+        requested_amt
+        high_risk_band_flag
+        bureau_score_low_flag
+        write_off_case_flag
+        writeoff_flag_combined
+        writeoff_recovery_flag
+        legal_action_taken_flag
+        legal_case_escalated_flag
+        legal_initiated_flag
+        legal_escalation_score
+        legal_action_flag
+        score_agreement_flag
+        dpd_count_30_plus
+        recovery_bucket_score
+        emi_ratio_buffer
+        loan_request_score
+        avg_balance_flag
+        emi_bounce_flag
+        high_balance_flag
+        bounce_flag
+        high_avg_bal_flag
+        dpd_m1
+        dpd_m3
+        dpd_m5
+    ;
+run;
+
+/* Step 9: Check for Orphan Records */
+
+proc sql;
+    create table orphan_txns as
+    select a.*
+    from CREDIT.TXN_STAGE_FINAL_MODEL_CLEANED a
+    left join CREDIT.CUSTOMER_MASTER b
+        on a.cust_id = b.cust_id
+    where b.cust_id is missing;
+quit;
