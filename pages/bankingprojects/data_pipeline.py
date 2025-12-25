@@ -388,8 +388,7 @@ def main():
     This application allows you to execute each stage of an example data pipeline 
     step-by-step, viewing the code and output at each stage. Due to storage and compute constraints,
     the "database" is a csv file with 37 primary features that are used to derive ~ 231 new features.
-    This is based on a SAS-based pipeline created by Sameer Shaikh in: "SAS Credit Risk Modelling - A to Z for PD Models". 
-    Data has also been created by Sameer Shaikh for the book.
+    Data has been created by Sameer Shaikh for his book, "SAS Credit Risk Modelling - A to Z for PD Models".
     
     **Instructions:**
     1. Load the raw data file (PD_RAW_VARIABLES.csv)
@@ -468,10 +467,10 @@ def main():
                     st.session_state.stage_results[current_stage_idx] = result_df
                     st.session_state.current_stage = min(current_stage_idx + 1, len(STAGES) - 1)
                     
-                    st.success(f"✅ Stage {stage['number']} executed successfully!")
+                    st.success(f"Stage {stage['number']} executed successfully!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error executing stage: {str(e)}")
+                    st.error(f"Error executing stage: {str(e)}")
                     st.exception(e)
     
     # Display results if stage has been executed
@@ -519,6 +518,33 @@ def main():
     progress = completed / total
     st.progress(progress)
     st.caption(f"Completed: {completed} / {total} stages ({progress*100:.1f}%)")
+    
+    # Network Graph Section
+    st.markdown("---")
+    st.markdown("### Primary Variable Network Graph")
+    st.markdown("View the network graph showing relationships between primary variables.")
+    
+    # Initialize session state for network graph visibility
+    if 'show_network_graph' not in st.session_state:
+        st.session_state.show_network_graph = False
+    
+    # Button to show network graph
+    if st.button("View Primary Variable Network", type="secondary"):
+        st.session_state.show_network_graph = True
+    
+    # Display network graph if button was clicked
+    if st.session_state.show_network_graph:
+        network_file = current_dir / "files" / "network_graph_primary.html"
+        if network_file.exists():
+            try:
+                with open(network_file, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                # Render the HTML using Streamlit components
+                st.components.v1.html(html_content, height=800)
+            except Exception as e:
+                st.error(f"Error loading network graph: {e}")
+        else:
+            st.error(f"Network graph file not found: {network_file}")
 
 if __name__ == "__main__":
     main()
