@@ -1,6 +1,6 @@
 """
 Variable Metadata Analysis
-Analyzes variable metadata, missing values, duplicates, and data quality from final pipeline output.
+Analyzes variable metadata, missing values, duplicates, and data quality.
 """
 
 import streamlit as st
@@ -534,6 +534,145 @@ def main():
     progress = completed / total
     st.progress(progress)
     st.caption(f"Completed: {completed} / {total} steps ({progress*100:.1f}%)")
+    
+    # Summary table - show when all steps are completed
+    if completed == total:
+        st.markdown("---")
+        st.markdown("### Analysis Summary Table")
+        st.markdown("Summary of key outputs from each step:")
+        
+        summary_data = []
+        
+        # Step 1: Metadata extraction
+        if 0 in st.session_state.step_results:
+            step1_result = st.session_state.step_results[0]
+            if isinstance(step1_result, pd.DataFrame):
+                numeric_vars = len(step1_result[step1_result['Variable'] != 'TOTAL'])
+                total_missing = step1_result[step1_result['Variable'] != 'TOTAL']['NMiss'].sum() if 'NMiss' in step1_result.columns else 0
+                summary_data.append({
+                    'Step': '1 - Extract Metadata',
+                    'Metric': 'Numeric Variables',
+                    'Value': f'{numeric_vars}',
+                    'Details': f'Total missing values: {total_missing:,}'
+                })
+        
+        # Step 3: % Missing
+        if 2 in st.session_state.step_results:
+            step3_result = st.session_state.step_results[2]
+            if isinstance(step3_result, pd.DataFrame):
+                high_missing_count = len(step3_result[step3_result['Pct_Missing'] > 30])
+                summary_data.append({
+                    'Step': '3 - % Missing',
+                    'Metric': 'Variables >30% Missing',
+                    'Value': f'{high_missing_count}',
+                    'Details': f'Out of {len(step3_result)} numeric variables'
+                })
+        
+        # Step 4: High Missing & Categorical Frequencies
+        if 3 in st.session_state.step_results:
+            step4_result = st.session_state.step_results[3]
+            if isinstance(step4_result, dict):
+                if 'high_missing' in step4_result:
+                    high_missing_vars = len(step4_result['high_missing'])
+                    summary_data.append({
+                        'Step': '4 - High Missing Vars',
+                        'Metric': 'Variables with >30% Missing',
+                        'Value': f'{high_missing_vars}',
+                        'Details': 'Variables flagged for review'
+                    })
+                if 'freq_tables' in step4_result:
+                    cat_vars_checked = len(step4_result['freq_tables'])
+                    # Calculate low cardinality (count unique values)
+                    low_card_vars = []
+                    for var, freq_df in step4_result['freq_tables'].items():
+                        if len(freq_df) <= 5:  # Low cardinality threshold
+                            low_card_vars.append(var)
+                    summary_data.append({
+                        'Step': '4 - Categorical Analysis',
+                        'Metric': 'Categorical Variables Analyzed',
+                        'Value': f'{cat_vars_checked}',
+                        'Details': f'Low cardinality (≤5 values): {len(low_card_vars)}'
+                    })
+        
+        # Step 5: Descriptive Statistics
+        if 4 in st.session_state.step_results:
+            step5_result = st.session_state.step_results[4]
+            if isinstance(step5_result, pd.DataFrame):
+                vars_analyzed = len(step5_result)
+                summary_data.append({
+                    'Step': '5 - Descriptive Stats',
+                    'Metric': 'Variables Analyzed',
+                    'Value': f'{vars_analyzed}',
+                    'Details': 'Risk variables (mean, std, min, max)'
+                })
+        
+        # Step 6: Invalid Categories
+        if 5 in st.session_state.step_results:
+            step6_result = st.session_state.step_results[5]
+            if isinstance(step6_result, dict):
+                cat_vars_checked = len(step6_result)
+                summary_data.append({
+                    'Step': '6 - Invalid Categories',
+                    'Metric': 'Categorical Variables Checked',
+                    'Value': f'{cat_vars_checked}',
+                    'Details': 'Checked for misspellings and invalid values'
+                })
+        
+        # Step 7: Duplicate Columns
+        if 6 in st.session_state.step_results:
+            step7_result = st.session_state.step_results[6]
+            if isinstance(step7_result, pd.DataFrame):
+                duplicate_groups = step7_result['group_id'].nunique() if not step7_result.empty else 0
+                duplicate_cols = len(step7_result)
+                columns_to_drop = step7_get_duplicate_list(step7_result)
+                summary_data.append({
+                    'Step': '7 - Duplicate Detection',
+                    'Metric': 'Duplicate Columns Found',
+                    'Value': f'{len(columns_to_drop)}',
+                    'Details': f'{duplicate_groups} duplicate groups, {duplicate_cols} total duplicate columns'
+                })
+        
+        # Step 8: Drop Duplicates
+        if 7 in st.session_state.step_results:
+            step8_result = st.session_state.step_results[7]
+            if isinstance(step8_result, dict) and 'cleaned_data' in step8_result:
+                original_rows = len(st.session_state.input_data)
+                cleaned_df = step8_result['cleaned_data']
+                cleaned_rows = len(cleaned_df)
+                cleaned_cols = len(cleaned_df.columns)
+                columns_dropped = len(step8_result['columns_dropped'])
+                
+                summary_data.append({
+                    'Step': '8 - Drop Duplicates',
+                    'Metric': 'Columns Dropped',
+                    'Value': f'{columns_dropped}',
+                    'Details': f'Final: {cleaned_cols} columns, {cleaned_rows:,} rows'
+                })
+                summary_data.append({
+                    'Step': '8 - Drop Duplicates',
+                    'Metric': 'Rows Remaining',
+                    'Value': f'{cleaned_rows:,}',
+                    'Details': f'Rows dropped: {original_rows - cleaned_rows:,}'
+                })
+        
+        # Step 9: Orphan Records
+        if 8 in st.session_state.step_results:
+            step9_result = st.session_state.step_results[8]
+            if isinstance(step9_result, pd.DataFrame):
+                orphan_count = len(step9_result)
+                summary_data.append({
+                    'Step': '9 - Orphan Records',
+                    'Metric': 'Orphan Records Found',
+                    'Value': f'{orphan_count}',
+                    'Details': 'Records without customer master match' if orphan_count > 0 else 'No orphan records'
+                })
+        
+        # Display summary table
+        if summary_data:
+            summary_df = pd.DataFrame(summary_data)
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Complete all steps to see summary table.")
 
 if __name__ == "__main__":
     main()
