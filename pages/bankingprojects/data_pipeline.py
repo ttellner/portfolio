@@ -1,6 +1,6 @@
 """
 Data Pipeline - Step-by-Step Execution
-Interactive step-by-step execution of data transformation pipeline. Code is based on a SAS-based pipeline created by Sameer Shaikh in: "SAS Credit Risk Modelling - A to Z for PD Models". Data has also been created by Sameer Shaikh for the book.
+Interactive step-by-step execution of data transformation pipeline.
 """
 
 import streamlit as st
@@ -388,6 +388,8 @@ def main():
     This application allows you to execute each stage of an example data pipeline 
     step-by-step, viewing the code and output at each stage. Due to storage and compute constraints,
     the "database" is a csv file with 37 primary features that are used to derive ~ 231 new features.
+    This is based on a SAS-based pipeline created by Sameer Shaikh in: "SAS Credit Risk Modelling - A to Z for PD Models". 
+    Data has also been created by Sameer Shaikh for the book.
     
     **Instructions:**
     1. Load the raw data file (PD_RAW_VARIABLES.csv)
