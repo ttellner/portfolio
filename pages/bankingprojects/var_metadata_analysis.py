@@ -229,7 +229,7 @@ orphan_records = merged[merged['_merge'] == 'left_only']
 
 def load_data_from_file():
     """Load data from CSV file."""
-    data_file = current_dir / "data" / "PD_RAW_VARIABLES.csv"
+    data_file = current_dir / "data" / "var_metadata_input.csv"
     if data_file.exists():
         return pd.read_csv(data_file)
     else:
@@ -255,7 +255,7 @@ def main():
     It takes the final output from the data pipeline and performs various quality checks.
     
     **Instructions:**
-    1. Load the final data from the data pipeline (or upload a CSV file)
+    1. Load the default data (final output from data pipeline with 268 columns) or upload a CSV file
     2. Execute each step sequentially
     3. View the code and output for each step
     4. Review duplicate column detection and removal
