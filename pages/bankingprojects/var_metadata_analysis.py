@@ -279,22 +279,6 @@ def main():
         
         st.markdown("---")
         
-        # Option to upload file (overrides default)
-        uploaded_file = st.file_uploader("Upload CSV File (Optional)", type=['csv'])
-        
-        if uploaded_file is not None:
-            try:
-                data = pd.read_csv(uploaded_file)
-                st.session_state.input_data = data
-                st.session_state.current_step = 0
-                st.session_state.step_results = {}
-                st.success(f"Loaded {len(data):,} rows and {len(data.columns)} columns")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error loading file: {e}")
-        
-        st.markdown("---")
-        
         if st.session_state.input_data is not None:
             st.success(f"Data loaded: {len(st.session_state.input_data):,} rows")
             st.markdown("---")
