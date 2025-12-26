@@ -236,6 +236,136 @@ def load_data_from_file():
         return None
 
 
+def create_metadata_dictionary(input_df, step_results):
+    """
+    Create a comprehensive metadata dictionary combining information from all analysis steps.
+    
+    Parameters:
+    -----------
+    input_df : pd.DataFrame
+        Original input dataframe
+    step_results : dict
+        Dictionary containing results from all analysis steps
+    
+    Returns:
+    --------
+    pd.DataFrame : Metadata dictionary with all variable information
+    """
+    metadata_list = []
+    
+    # Get all variables from original input
+    all_vars = input_df.columns.tolist()
+    
+    # Get metadata from Step 1
+    step1_metadata = {}
+    if 0 in step_results:
+        step1_result = step_results[0]
+        if isinstance(step1_result, pd.DataFrame):
+            for _, row in step1_result.iterrows():
+                if row['Variable'] != 'TOTAL':
+                    step1_metadata[row['Variable']] = {
+                        'N': row.get('N', 0),
+                        'NMiss': row.get('NMiss', 0)
+                    }
+    
+    # Get % missing from Step 3
+    step3_pct_missing = {}
+    if 2 in step_results:
+        step3_result = step_results[2]
+        if isinstance(step3_result, pd.DataFrame):
+            for _, row in step3_result.iterrows():
+                step3_pct_missing[row['Variable']] = row.get('Pct_Missing', 0)
+    
+    # Get descriptive stats from Step 5
+    step5_stats = {}
+    if 4 in step_results:
+        step5_result = step_results[4]
+        if isinstance(step5_result, pd.DataFrame) and 'Variable' in step5_result.columns:
+            for _, row in step5_result.iterrows():
+                step5_stats[row['Variable']] = {
+                    'Mean': row.get('Mean', None),
+                    'Std': row.get('Std', None),
+                    'Min': row.get('Min', None),
+                    'Max': row.get('Max', None)
+                }
+    
+    # Get duplicate information from Step 7
+    duplicate_cols = set()
+    if 6 in step_results:
+        step7_result = step_results[6]
+        if isinstance(step7_result, pd.DataFrame):
+            duplicate_cols = set(step7_get_duplicate_list(step7_result))
+    
+    # Get dropped columns from Step 8
+    dropped_cols = set()
+    if 7 in step_results:
+        step8_result = step_results[7]
+        if isinstance(step8_result, dict) and 'columns_dropped' in step8_result:
+            dropped_cols = set(step8_result['columns_dropped'])
+    
+    # Get categorical frequency info from Step 4/6
+    categorical_vars = set()
+    if 3 in step_results:
+        step4_result = step_results[3]
+        if isinstance(step4_result, dict) and 'freq_tables' in step4_result:
+            categorical_vars = set(step4_result['freq_tables'].keys())
+    
+    if 5 in step_results:
+        step6_result = step_results[5]
+        if isinstance(step6_result, dict):
+            categorical_vars.update(step6_result.keys())
+    
+    # Build metadata dictionary for each variable
+    for var in all_vars:
+        var_metadata = {
+            'Variable': var,
+            'Data_Type': 'Numeric' if pd.api.types.is_numeric_dtype(input_df[var]) else 'Categorical',
+            'N': step1_metadata.get(var, {}).get('N', input_df[var].count()),
+            'NMiss': step1_metadata.get(var, {}).get('NMiss', input_df[var].isnull().sum()),
+            'Pct_Missing': step3_pct_missing.get(var, (input_df[var].isnull().sum() / len(input_df) * 100) if len(input_df) > 0 else 0),
+            'Is_Duplicate': 'Yes' if var in duplicate_cols else 'No',
+            'Is_Dropped': 'Yes' if var in dropped_cols else 'No',
+            'Is_Categorical': 'Yes' if var in categorical_vars else 'No'
+        }
+        
+        # Add descriptive statistics for numeric variables
+        if var in step5_stats:
+            var_metadata['Mean'] = step5_stats[var].get('Mean', None)
+            var_metadata['Std'] = step5_stats[var].get('Std', None)
+            var_metadata['Min'] = step5_stats[var].get('Min', None)
+            var_metadata['Max'] = step5_stats[var].get('Max', None)
+        elif pd.api.types.is_numeric_dtype(input_df[var]):
+            # Calculate basic stats if not in Step 5
+            var_metadata['Mean'] = input_df[var].mean()
+            var_metadata['Std'] = input_df[var].std()
+            var_metadata['Min'] = input_df[var].min()
+            var_metadata['Max'] = input_df[var].max()
+        else:
+            var_metadata['Mean'] = None
+            var_metadata['Std'] = None
+            var_metadata['Min'] = None
+            var_metadata['Max'] = None
+        
+        # Add unique values count for categorical
+        if var in categorical_vars or not pd.api.types.is_numeric_dtype(input_df[var]):
+            var_metadata['Unique_Values'] = input_df[var].nunique()
+        else:
+            var_metadata['Unique_Values'] = None
+        
+        metadata_list.append(var_metadata)
+    
+    # Create DataFrame
+    metadata_df = pd.DataFrame(metadata_list)
+    
+    # Round numeric columns
+    numeric_cols = ['Pct_Missing', 'Mean', 'Std']
+    for col in numeric_cols:
+        if col in metadata_df.columns:
+            metadata_df[col] = metadata_df[col].round(2)
+    
+    return metadata_df
+
+
 def display_step_info(step):
     """Display step information and code."""
     st.markdown(f'<div class="stage-header">Step {step["number"]}: {step["name"]}</div>', unsafe_allow_html=True)
@@ -391,8 +521,16 @@ def main():
                             output_file = current_dir / "data" / "var_metadata_output.csv"
                             result.to_csv(output_file, index=False)
                             
+                            # Create and save metadata dictionary
+                            metadata_dict = create_metadata_dictionary(
+                                st.session_state.input_data,
+                                st.session_state.step_results
+                            )
+                            metadata_file = current_dir / "data" / "var_metadata_dictionary.csv"
+                            metadata_dict.to_csv(metadata_file, index=False)
+                            
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv")
+                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv. Metadata dictionary saved to var_metadata_dictionary.csv")
                             st.rerun()
                     
                     # Special handling for Step 9
