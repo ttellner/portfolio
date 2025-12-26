@@ -5,7 +5,6 @@ Analyzes variable metadata, missing values, duplicates, and data quality.
 
 import streamlit as st
 import pandas as pd
-import numpy as np
 from pathlib import Path
 import sys
 
@@ -255,7 +254,7 @@ def main():
     It takes the final output from the data pipeline and performs various quality checks.
     
     **Instructions:**
-    1. Load the default data (final output from data pipeline with 268 columns) or upload a CSV file
+    1. Default data (var_metadata_input.csv with 268 columns) is loaded automatically
     2. Execute each step sequentially
     3. View the code and output for each step
     4. Review duplicate column detection and removal
@@ -263,31 +262,38 @@ def main():
     
     st.markdown("---")
     
-    # Sidebar for data loading and navigation
+    # Auto-load default data if not already loaded
+    if st.session_state.input_data is None:
+        data = load_data_from_file()
+        if data is not None:
+            st.session_state.input_data = data
+            st.session_state.current_step = 0
+            st.session_state.step_results = {}
+    
+    # Sidebar for navigation
     with st.sidebar:
-        st.header("Data Loading")
+        st.header("Data Information")
+        if st.session_state.input_data is not None:
+            st.success(f"Data loaded: {len(st.session_state.input_data):,} rows, {len(st.session_state.input_data.columns)} columns")
+            st.caption("Default: var_metadata_input.csv (268 columns from data pipeline)")
         
-        # Option to upload file
-        uploaded_file = st.file_uploader("Upload CSV File", type=['csv'])
+        st.markdown("---")
+        
+        # Option to upload file (overrides default)
+        uploaded_file = st.file_uploader("Upload CSV File (Optional)", type=['csv'])
         
         if uploaded_file is not None:
             try:
                 data = pd.read_csv(uploaded_file)
                 st.session_state.input_data = data
+                st.session_state.current_step = 0
+                st.session_state.step_results = {}
                 st.success(f"Loaded {len(data):,} rows and {len(data.columns)} columns")
+                st.rerun()
             except Exception as e:
                 st.error(f"Error loading file: {e}")
         
-        # Or load from default location
-        if st.button("Load Default Data", type="primary"):
-            with st.spinner("Loading data..."):
-                data = load_data_from_file()
-                if data is not None:
-                    st.session_state.input_data = data
-                    st.session_state.current_step = 0
-                    st.session_state.step_results = {}
-                    st.success(f"Loaded {len(data):,} rows and {len(data.columns)} columns")
-                    st.rerun()
+        st.markdown("---")
         
         if st.session_state.input_data is not None:
             st.success(f"Data loaded: {len(st.session_state.input_data):,} rows")
@@ -312,7 +318,7 @@ def main():
     
     # Main content area
     if st.session_state.input_data is None:
-        st.warning("Please load data using the sidebar.")
+        st.error("Error: Could not load default data file. Please check that var_metadata_input.csv exists in the data folder.")
         return
     
     # Display current step
@@ -386,7 +392,7 @@ def main():
                                 only_in_hardcoded = hardcoded_set - step7_set
                                 
                                 if only_in_step7 or only_in_hardcoded:
-                                    st.warning(f"Step 7 output differs from hardcoded list. Using Step 7's output.")
+                                    st.warning("Step 7 output differs from hardcoded list. Using Step 7's output.")
                                     st.write(f"Only in Step 7: {list(only_in_step7)}")
                                     st.write(f"Only in hardcoded: {list(only_in_hardcoded)}")
                                 columns_to_drop = step7_duplicate_list
@@ -535,144 +541,182 @@ def main():
     st.progress(progress)
     st.caption(f"Completed: {completed} / {total} steps ({progress*100:.1f}%)")
     
-    # Summary table - show when all steps are completed
+    # Detailed Summary Tables - show when all steps are completed
     if completed == total:
         st.markdown("---")
-        st.markdown("### Analysis Summary Table")
-        st.markdown("Summary of key outputs from each step:")
+        st.markdown("### Detailed Analysis Summary")
+        st.markdown("Summary tables for each step showing rows/columns affected:")
         
-        summary_data = []
-        
-        # Step 1: Metadata extraction
+        # Step 1: Extract Metadata
         if 0 in st.session_state.step_results:
             step1_result = st.session_state.step_results[0]
             if isinstance(step1_result, pd.DataFrame):
-                numeric_vars = len(step1_result[step1_result['Variable'] != 'TOTAL'])
-                total_missing = step1_result[step1_result['Variable'] != 'TOTAL']['NMiss'].sum() if 'NMiss' in step1_result.columns else 0
-                summary_data.append({
-                    'Step': '1 - Extract Metadata',
-                    'Metric': 'Numeric Variables',
-                    'Value': f'{numeric_vars}',
-                    'Details': f'Total missing values: {total_missing:,}'
+                st.markdown("#### Step 1: Extract Variable Metadata")
+                numeric_vars_df = step1_result[step1_result['Variable'] != 'TOTAL'].copy()
+                summary_table = pd.DataFrame({
+                    'Metric': ['Numeric Variables Analyzed', 'Total Rows in Dataset', 'Total Missing Values'],
+                    'Count': [len(numeric_vars_df), numeric_vars_df['N'].sum(), numeric_vars_df['NMiss'].sum()],
+                    'Variables/Details': [
+                        f"{len(numeric_vars_df)} variables: {', '.join(numeric_vars_df['Variable'].head(10).tolist())}" + (f" ... and {len(numeric_vars_df) - 10} more" if len(numeric_vars_df) > 10 else ""),
+                        f"All {numeric_vars_df['N'].sum():,} observations",
+                        f"Across all {len(numeric_vars_df)} numeric variables"
+                    ]
                 })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 2: Transpose Missing
+        if 1 in st.session_state.step_results:
+            step2_result = st.session_state.step_results[1]
+            if isinstance(step2_result, pd.DataFrame):
+                st.markdown("#### Step 2: Transpose Missing Summary")
+                summary_table = pd.DataFrame({
+                    'Metric': ['Variables Transposed'],
+                    'Count': [len(step2_result)],
+                    'Variables/Details': [f"{len(step2_result)} variables transposed: {', '.join(step2_result['Variable'].head(10).tolist())}" + (f" ... and {len(step2_result) - 10} more" if len(step2_result) > 10 else "")]
+                })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 3: % Missing
         if 2 in st.session_state.step_results:
             step3_result = st.session_state.step_results[2]
             if isinstance(step3_result, pd.DataFrame):
-                high_missing_count = len(step3_result[step3_result['Pct_Missing'] > 30])
-                summary_data.append({
-                    'Step': '3 - % Missing',
-                    'Metric': 'Variables >30% Missing',
-                    'Value': f'{high_missing_count}',
-                    'Details': f'Out of {len(step3_result)} numeric variables'
+                st.markdown("#### Step 3: Calculate % Missing")
+                high_missing = step3_result[step3_result['Pct_Missing'] > 30]
+                summary_table = pd.DataFrame({
+                    'Metric': ['Variables Analyzed', 'Variables >30% Missing'],
+                    'Count': [len(step3_result), len(high_missing)],
+                    'Variables/Details': [
+                        f"All {len(step3_result)} numeric variables",
+                        f"{len(high_missing)} variables: {', '.join(high_missing['Variable'].tolist()) if len(high_missing) <= 20 else ', '.join(high_missing['Variable'].head(20).tolist()) + f' ... and {len(high_missing) - 20} more'}"
+                    ]
                 })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 4: High Missing & Categorical Frequencies
         if 3 in st.session_state.step_results:
             step4_result = st.session_state.step_results[3]
             if isinstance(step4_result, dict):
-                if 'high_missing' in step4_result:
-                    high_missing_vars = len(step4_result['high_missing'])
-                    summary_data.append({
-                        'Step': '4 - High Missing Vars',
+                st.markdown("#### Step 4: High Missing Variables & Categorical Frequencies")
+                summary_rows = []
+                
+                if 'high_missing' in step4_result and not step4_result['high_missing'].empty:
+                    high_missing_vars = step4_result['high_missing']['Variable'].tolist()
+                    summary_rows.append({
                         'Metric': 'Variables with >30% Missing',
-                        'Value': f'{high_missing_vars}',
-                        'Details': 'Variables flagged for review'
+                        'Count': len(high_missing_vars),
+                        'Variables/Details': ', '.join(high_missing_vars) if len(high_missing_vars) <= 20 else ', '.join(high_missing_vars[:20]) + f" ... and {len(high_missing_vars) - 20} more"
                     })
+                else:
+                    summary_rows.append({
+                        'Metric': 'Variables with >30% Missing',
+                        'Count': 0,
+                        'Variables/Details': 'No variables with >30% missing'
+                    })
+                
                 if 'freq_tables' in step4_result:
-                    cat_vars_checked = len(step4_result['freq_tables'])
-                    # Calculate low cardinality (count unique values)
-                    low_card_vars = []
-                    for var, freq_df in step4_result['freq_tables'].items():
-                        if len(freq_df) <= 5:  # Low cardinality threshold
-                            low_card_vars.append(var)
-                    summary_data.append({
-                        'Step': '4 - Categorical Analysis',
+                    cat_vars = list(step4_result['freq_tables'].keys())
+                    low_card_vars = [var for var, freq_df in step4_result['freq_tables'].items() if len(freq_df) <= 5]
+                    summary_rows.append({
                         'Metric': 'Categorical Variables Analyzed',
-                        'Value': f'{cat_vars_checked}',
-                        'Details': f'Low cardinality (≤5 values): {len(low_card_vars)}'
+                        'Count': len(cat_vars),
+                        'Variables/Details': f"Variables: {', '.join(cat_vars)}. Low cardinality (≤5 values): {', '.join(low_card_vars) if low_card_vars else 'None'}"
                     })
+                
+                summary_table = pd.DataFrame(summary_rows)
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 5: Descriptive Statistics
         if 4 in st.session_state.step_results:
             step5_result = st.session_state.step_results[4]
             if isinstance(step5_result, pd.DataFrame):
-                vars_analyzed = len(step5_result)
-                summary_data.append({
-                    'Step': '5 - Descriptive Stats',
-                    'Metric': 'Variables Analyzed',
-                    'Value': f'{vars_analyzed}',
-                    'Details': 'Risk variables (mean, std, min, max)'
+                st.markdown("#### Step 5: Descriptive Statistics")
+                vars_analyzed = step5_result['Variable'].tolist() if 'Variable' in step5_result.columns else []
+                summary_table = pd.DataFrame({
+                    'Metric': ['Variables Analyzed'],
+                    'Count': [len(step5_result)],
+                    'Variables/Details': [f"{len(vars_analyzed)} variables: {', '.join(vars_analyzed)}"]
                 })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 6: Invalid Categories
         if 5 in st.session_state.step_results:
             step6_result = st.session_state.step_results[5]
             if isinstance(step6_result, dict):
-                cat_vars_checked = len(step6_result)
-                summary_data.append({
-                    'Step': '6 - Invalid Categories',
-                    'Metric': 'Categorical Variables Checked',
-                    'Value': f'{cat_vars_checked}',
-                    'Details': 'Checked for misspellings and invalid values'
+                st.markdown("#### Step 6: Invalid Categories Check")
+                cat_vars = list(step6_result.keys())
+                summary_table = pd.DataFrame({
+                    'Metric': ['Categorical Variables Checked'],
+                    'Count': [len(cat_vars)],
+                    'Variables/Details': [f"{len(cat_vars)} variables: {', '.join(cat_vars)}"]
                 })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 7: Duplicate Columns
         if 6 in st.session_state.step_results:
             step7_result = st.session_state.step_results[6]
             if isinstance(step7_result, pd.DataFrame):
+                st.markdown("#### Step 7: Duplicate Column Detection")
+                duplicate_cols = step7_get_duplicate_list(step7_result)
                 duplicate_groups = step7_result['group_id'].nunique() if not step7_result.empty else 0
-                duplicate_cols = len(step7_result)
-                columns_to_drop = step7_get_duplicate_list(step7_result)
-                summary_data.append({
-                    'Step': '7 - Duplicate Detection',
-                    'Metric': 'Duplicate Columns Found',
-                    'Value': f'{len(columns_to_drop)}',
-                    'Details': f'{duplicate_groups} duplicate groups, {duplicate_cols} total duplicate columns'
+                summary_table = pd.DataFrame({
+                    'Metric': ['Duplicate Columns Found', 'Duplicate Groups'],
+                    'Count': [len(duplicate_cols), duplicate_groups],
+                    'Variables/Details': [
+                        f"{len(duplicate_cols)} columns to drop: {', '.join(duplicate_cols[:30])}" + (f" ... and {len(duplicate_cols) - 30} more" if len(duplicate_cols) > 30 else ""),
+                        f"{duplicate_groups} groups of duplicate columns"
+                    ]
                 })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 8: Drop Duplicates
         if 7 in st.session_state.step_results:
             step8_result = st.session_state.step_results[7]
             if isinstance(step8_result, dict) and 'cleaned_data' in step8_result:
+                st.markdown("#### Step 8: Drop Duplicate Columns")
                 original_rows = len(st.session_state.input_data)
+                original_cols = len(st.session_state.input_data.columns)
                 cleaned_df = step8_result['cleaned_data']
                 cleaned_rows = len(cleaned_df)
                 cleaned_cols = len(cleaned_df.columns)
-                columns_dropped = len(step8_result['columns_dropped'])
+                columns_dropped = step8_result['columns_dropped']
                 
-                summary_data.append({
-                    'Step': '8 - Drop Duplicates',
-                    'Metric': 'Columns Dropped',
-                    'Value': f'{columns_dropped}',
-                    'Details': f'Final: {cleaned_cols} columns, {cleaned_rows:,} rows'
+                summary_table = pd.DataFrame({
+                    'Metric': ['Columns Before', 'Columns Dropped', 'Columns After', 'Rows Before', 'Rows After', 'Rows Dropped'],
+                    'Count': [original_cols, len(columns_dropped), cleaned_cols, original_rows, cleaned_rows, original_rows - cleaned_rows],
+                    'Variables/Details': [
+                        f"{original_cols} columns in original dataset",
+                        f"{len(columns_dropped)} columns: {', '.join(columns_dropped[:30])}" + (f" ... and {len(columns_dropped) - 30} more" if len(columns_dropped) > 30 else ""),
+                        f"{cleaned_cols} columns remaining",
+                        f"{original_rows:,} rows in original dataset",
+                        f"{cleaned_rows:,} rows remaining",
+                        f"{original_rows - cleaned_rows:,} rows removed (if any)"
+                    ]
                 })
-                summary_data.append({
-                    'Step': '8 - Drop Duplicates',
-                    'Metric': 'Rows Remaining',
-                    'Value': f'{cleaned_rows:,}',
-                    'Details': f'Rows dropped: {original_rows - cleaned_rows:,}'
-                })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
         # Step 9: Orphan Records
         if 8 in st.session_state.step_results:
             step9_result = st.session_state.step_results[8]
             if isinstance(step9_result, pd.DataFrame):
+                st.markdown("#### Step 9: Orphan Records Check")
                 orphan_count = len(step9_result)
-                summary_data.append({
-                    'Step': '9 - Orphan Records',
-                    'Metric': 'Orphan Records Found',
-                    'Value': f'{orphan_count}',
-                    'Details': 'Records without customer master match' if orphan_count > 0 else 'No orphan records'
+                if orphan_count > 0:
+                    # Get row indices or IDs if available
+                    if 'cust_id' in step9_result.columns:
+                        orphan_ids = step9_result['cust_id'].head(50).tolist()
+                        details = f"{orphan_count} orphan records found. Sample IDs: {', '.join(map(str, orphan_ids))}" + (f" ... and {orphan_count - 50} more" if orphan_count > 50 else "")
+                    else:
+                        orphan_indices = step9_result.index.head(50).tolist()
+                        details = f"{orphan_count} orphan records found. Sample row indices: {', '.join(map(str, orphan_indices))}" + (f" ... and {orphan_count - 50} more" if orphan_count > 50 else "")
+                else:
+                    details = "No orphan records found (or customer master not available)"
+                
+                summary_table = pd.DataFrame({
+                    'Metric': ['Orphan Records Found'],
+                    'Count': [orphan_count],
+                    'Variables/Details': [details]
                 })
-        
-        # Display summary table
-        if summary_data:
-            summary_df = pd.DataFrame(summary_data)
-            st.dataframe(summary_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("Complete all steps to see summary table.")
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     main()
