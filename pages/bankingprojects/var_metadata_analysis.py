@@ -386,8 +386,13 @@ def main():
                                 'cleaned_data': result,
                                 'columns_dropped': columns_to_drop
                             }
+                            
+                            # Save output CSV file
+                            output_file = current_dir / "data" / "var_metadata_output.csv"
+                            result.to_csv(output_file, index=False)
+                            
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns.")
+                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv")
                             st.rerun()
                     
                     # Special handling for Step 9
@@ -529,6 +534,24 @@ def main():
     if completed == total:
         st.markdown("---")
         st.markdown("### Detailed Analysis Summary")
+        
+        # Overall Summary Table (first table)
+        if 7 in st.session_state.step_results:
+            step8_result = st.session_state.step_results[7]
+            if isinstance(step8_result, dict) and 'cleaned_data' in step8_result:
+                original_cols = len(st.session_state.input_data.columns)
+                cleaned_df = step8_result['cleaned_data']
+                cleaned_cols = len(cleaned_df.columns)
+                columns_dropped = len(step8_result['columns_dropped'])
+                
+                st.markdown("#### Overall Summary")
+                overall_summary = pd.DataFrame({
+                    'Metric': ['Columns Input', 'Columns Output', 'Columns Deleted'],
+                    'Count': [original_cols, cleaned_cols, columns_dropped]
+                })
+                st.dataframe(overall_summary, use_container_width=True, hide_index=True)
+        
+        st.markdown("---")
         st.markdown("Summary tables for each step showing rows/columns affected:")
         
         # Step 1: Extract Metadata
