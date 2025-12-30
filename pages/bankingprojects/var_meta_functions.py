@@ -137,9 +137,17 @@ def step7_duplicate_columns(df: pd.DataFrame, sample_size: Optional[int] = 1000)
     Step 7: Duplicate Column Detection
     Detects duplicate columns by creating MD5 hashes of column values.
     Returns a dataframe with group_id and column_name for duplicate groups.
+    Excludes dpd_m1 through dpd_m12 columns from duplicate detection.
     """
+    # Columns to exclude from duplicate detection
+    exclude_columns = [f'dpd_m{i}' for i in range(1, 13)]
+    
     # Sample data if specified
     df_sample = df.sample(n=min(sample_size, len(df))) if sample_size and len(df) > sample_size else df.copy()
+    
+    # Exclude specified columns from duplicate detection
+    columns_to_check = [col for col in df_sample.columns if col not in exclude_columns]
+    df_sample = df_sample[columns_to_check].copy()
     
     # Transpose: columns become rows
     df_transposed = df_sample.T

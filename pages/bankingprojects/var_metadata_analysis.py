@@ -24,7 +24,6 @@ from var_meta_functions import (
     step7_duplicate_columns,
     step7_get_duplicate_list,
     step8_drop_duplicates,
-    step8_get_hardcoded_list,
     step9_orphan_records
 )
 
@@ -197,12 +196,11 @@ df_transposed['digest'] = df_transposed.apply(create_hash, axis=1)
     {
         'number': 8,
         'name': 'Drop Duplicate Columns',
-        'description': 'Drops duplicate columns identified in Step 7. Compares Step 7 output with hardcoded list and uses Step 7 output if they match.',
+        'description': 'Drops duplicate columns identified in Step 7.',
         'function': step8_drop_duplicates,
         'code': '''
 # Drop duplicate columns
-# Uses list from Step 7 if it matches hardcoded list,
-# otherwise uses Step 7's output
+# Uses list from Step 7's duplicate detection
 result = df.drop(columns=columns_to_drop, errors='ignore')
 '''
     },
@@ -504,27 +502,7 @@ def main():
                             st.error("Please execute Step 7 first to detect duplicate columns.")
                         else:
                             step7_result = st.session_state.step_results[6]
-                            step7_duplicate_list = step7_get_duplicate_list(step7_result)
-                            hardcoded_list = step8_get_hardcoded_list()
-                            
-                            # Compare lists (normalize by sorting and converting to sets)
-                            step7_set = set(step7_duplicate_list)
-                            hardcoded_set = set(hardcoded_list)
-                            
-                            # Use Step 7's output if it matches hardcoded list
-                            if step7_set == hardcoded_set:
-                                columns_to_drop = step7_duplicate_list
-                                st.info(f"Step 7 output matches hardcoded list. Using Step 7's output ({len(columns_to_drop)} columns).")
-                            else:
-                                # Show difference
-                                only_in_step7 = step7_set - hardcoded_set
-                                only_in_hardcoded = hardcoded_set - step7_set
-                                
-                                if only_in_step7 or only_in_hardcoded:
-                                    st.warning("Step 7 output differs from hardcoded list. Using Step 7's output.")
-                                    st.write(f"Only in Step 7: {list(only_in_step7)}")
-                                    st.write(f"Only in hardcoded: {list(only_in_hardcoded)}")
-                                columns_to_drop = step7_duplicate_list
+                            columns_to_drop = step7_get_duplicate_list(step7_result)
                             
                             result = step8_drop_duplicates(input_df, columns_to_drop)
                             st.session_state.step_results[current_step_idx] = {
