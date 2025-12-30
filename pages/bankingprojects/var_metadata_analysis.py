@@ -427,6 +427,21 @@ def main():
                 st.session_state.current_step = 0
                 st.session_state.step_results = {}
                 st.rerun()
+            
+            # Download button for output CSV (only show if Step 8 is completed)
+            if 7 in st.session_state.step_results:
+                st.markdown("---")
+                st.header("Download Results")
+                output_file = current_dir / "data" / "var_metadata_output.csv"
+                if output_file.exists():
+                    with open(output_file, 'rb') as f:
+                        st.download_button(
+                            label="Download var_metadata_output.csv",
+                            data=f.read(),
+                            file_name="var_metadata_output.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
         else:
             st.info("Please load data first")
     
