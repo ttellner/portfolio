@@ -512,12 +512,16 @@ def main():
                                 'columns_dropped': columns_to_drop
                             }
                             
+                            # Ensure data directory exists
+                            data_dir = current_dir / "data"
+                            data_dir.mkdir(parents=True, exist_ok=True)
+                            
                             # Save output CSV file
-                            output_file = current_dir / "data" / "var_metadata_output.csv"
+                            output_file = data_dir / "var_metadata_output.csv"
                             result.to_csv(output_file, index=False)
                             
-                            # Save as feat_eng_data.csv for next step
-                            feat_eng_file = current_dir / "data" / "feat_eng_data.csv"
+                            # Save as feat_eng_data.csv for next step (permanent file, overwrites each run)
+                            feat_eng_file = data_dir / "feat_eng_data.csv"
                             result.to_csv(feat_eng_file, index=False)
                             
                             # Create and save metadata dictionary
@@ -525,7 +529,7 @@ def main():
                                 st.session_state.input_data,
                                 st.session_state.step_results
                             )
-                            metadata_file = current_dir / "data" / "var_metadata_dictionary.csv"
+                            metadata_file = data_dir / "var_metadata_dictionary.csv"
                             metadata_dict.to_csv(metadata_file, index=False)
                             
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
