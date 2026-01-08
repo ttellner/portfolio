@@ -78,16 +78,18 @@ else:
     project_files = [f.name for f in base_dir.iterdir() 
                      if f.suffix == ".py" and "_functions" not in f.name]
     
-    # Sort files: data_pipeline.py, then var_metadata_analysis.py, then streamlit_app.py
+    # Sort files: data_pipeline.py, var_metadata_analysis.py, feat_eng_analysis.py, then streamlit_app.py
     def sort_key(filename):
         if "data_pipeline" in filename and "functions" not in filename:
-            return (0, filename)  # data_pipeline.py comes first
+            return (0, filename)  # Data Analysis Pipeline comes first
         elif "var_metadata_analysis" in filename:
-            return (1, filename)  # var_metadata_analysis.py comes second
+            return (1, filename)  # Variable Metadata Analysis comes second
+        elif "feat_eng_analysis" in filename:
+            return (2, filename)  # Feature Engineering Analysis comes third
         elif "streamlit_app" in filename:
-            return (2, filename)  # streamlit_app.py comes third
+            return (3, filename)  # Credit Scorecard Models comes fourth
         else:
-            return (3, filename)  # Others come last
+            return (4, filename)  # Others come last
     
     project_files = sorted(project_files, key=sort_key)
     

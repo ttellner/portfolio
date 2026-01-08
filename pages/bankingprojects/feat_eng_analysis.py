@@ -330,7 +330,17 @@ def main():
     col1, col2 = st.columns([1, 4])
     with col1:
         execute_disabled = current_step_idx in st.session_state.step_results
-        if st.button("Execute Step", type="primary", disabled=execute_disabled):
+        is_final_step = current_step_idx == len(STEPS) - 1
+        all_steps_completed = len(st.session_state.step_results) == len(STEPS)
+        
+        # Change button text for final step when all steps are completed
+        if is_final_step and all_steps_completed:
+            button_text = "Proceed to next Analysis"
+            if st.button(button_text, type="primary", disabled=True):
+                pass  # Disabled for now as requested
+        else:
+            button_text = "Execute Step"
+            if st.button(button_text, type="primary", disabled=execute_disabled):
             with st.spinner(f"Executing Step {step['number']}..."):
                 try:
                     input_df = st.session_state.input_data.copy()
@@ -417,13 +427,21 @@ def main():
                                 percentiles
                             )
                             
+                            # Ensure data directory exists
+                            data_dir = current_dir / "data"
+                            data_dir.mkdir(parents=True, exist_ok=True)
+                            
                             # Save output CSV file
-                            output_file = current_dir / "data" / "feat_eng_output.csv"
+                            output_file = data_dir / "feat_eng_output.csv"
                             result.to_csv(output_file, index=False)
+                            
+                            # Save as eda_data.csv for next step (permanent file, overwrites each run)
+                            eda_file = data_dir / "eda_data.csv"
+                            result.to_csv(eda_file, index=False)
                             
                             st.session_state.step_results[current_step_idx] = result
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv")
+                            st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv and eda_data.csv")
                             st.rerun()
                 
                 except Exception as e:

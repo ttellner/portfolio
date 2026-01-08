@@ -463,141 +463,151 @@ def main():
     col1, col2 = st.columns([1, 4])
     with col1:
         execute_disabled = current_step_idx in st.session_state.step_results
-        if st.button("Execute Step", type="primary", disabled=execute_disabled):
-            with st.spinner(f"Executing Step {step['number']}..."):
-                try:
-                    input_df = st.session_state.input_data.copy()
-                    
-                    # Special handling for Step 4
-                    if step['number'] == 4:
-                        # Need results from Step 3
-                        if 2 not in st.session_state.step_results:
-                            st.error("Please execute Step 3 first to get missing percentage data.")
-                        else:
-                            step3_result = st.session_state.step_results[2]
-                            high_missing = step4_high_missing_vars(step3_result, threshold=30.0)
-                            
-                            cat_vars = ['gender', 'marital_status', 'residence_type']
-                            freq_tables = step4_categorical_frequencies(input_df, cat_vars)
-                            
-                            result = {
-                                'high_missing': high_missing,
-                                'freq_tables': freq_tables
-                            }
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
-                            st.rerun()
-                    
-                    # Special handling for Step 7
-                    elif step['number'] == 7:
-                        result = step7_duplicate_columns(input_df, sample_size=1000)
-                        st.session_state.step_results[current_step_idx] = result
-                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                        st.success(f"Step {step['number']} executed successfully!")
-                        st.rerun()
-                    
-                    # Special handling for Step 8
-                    elif step['number'] == 8:
-                        # Get duplicate list from Step 7
-                        if 6 not in st.session_state.step_results:
-                            st.error("Please execute Step 7 first to detect duplicate columns.")
-                        else:
-                            step7_result = st.session_state.step_results[6]
-                            columns_to_drop = step7_get_duplicate_list(step7_result)
-                            
-                            result = step8_drop_duplicates(input_df, columns_to_drop)
-                            st.session_state.step_results[current_step_idx] = {
-                                'cleaned_data': result,
-                                'columns_dropped': columns_to_drop
-                            }
-                            
-                            # Ensure data directory exists
-                            data_dir = current_dir / "data"
-                            data_dir.mkdir(parents=True, exist_ok=True)
-                            
-                            # Save output CSV file
-                            output_file = data_dir / "var_metadata_output.csv"
-                            result.to_csv(output_file, index=False)
-                            
-                            # Save as feat_eng_data.csv for next step (permanent file, overwrites each run)
-                            feat_eng_file = data_dir / "feat_eng_data.csv"
-                            result.to_csv(feat_eng_file, index=False)
-                            
-                            # Create and save metadata dictionary
-                            metadata_dict = create_metadata_dictionary(
-                                st.session_state.input_data,
-                                st.session_state.step_results
-                            )
-                            metadata_file = data_dir / "var_metadata_dictionary.csv"
-                            metadata_dict.to_csv(metadata_file, index=False)
-                            
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv and feat_eng_data.csv. Metadata dictionary saved to var_metadata_dictionary.csv")
-                            st.rerun()
-                    
-                    # Special handling for Step 9
-                    elif step['number'] == 9:
-                        # Step 9 requires customer master (optional)
-                        result = step9_orphan_records(input_df, customer_master=None)
-                        st.session_state.step_results[current_step_idx] = result
-                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                        st.success(f"Step {step['number']} executed successfully!")
-                        st.rerun()
-                    
-                    # Standard steps
-                    elif step['function'] is not None:
-                        # Steps 1-3 need special handling for dependencies
-                        if step['number'] == 1:
-                            result = step['function'](input_df)
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
-                            st.rerun()
+        is_final_step = current_step_idx == len(STEPS) - 1
+        all_steps_completed = len(st.session_state.step_results) == len(STEPS)
+        
+        # Change button text for final step when all steps are completed
+        if is_final_step and all_steps_completed:
+            if st.button("Proceed to next Analysis", type="primary", disabled=False):
+                # Navigate to feat_eng_analysis.py
+                st.query_params.update({"project": "feat_eng_analysis.py"})
+                st.rerun()
+        else:
+            if st.button("Execute Step", type="primary", disabled=execute_disabled):
+                with st.spinner(f"Executing Step {step['number']}..."):
+                    try:
+                        input_df = st.session_state.input_data.copy()
                         
-                        elif step['number'] == 2:
-                            if 0 not in st.session_state.step_results:
-                                st.error("Please execute Step 1 first.")
+                        # Special handling for Step 4
+                        if step['number'] == 4:
+                            # Need results from Step 3
+                            if 2 not in st.session_state.step_results:
+                                st.error("Please execute Step 3 first to get missing percentage data.")
                             else:
-                                step1_result = st.session_state.step_results[0]
-                                result = step['function'](step1_result)
+                                step3_result = st.session_state.step_results[2]
+                                high_missing = step4_high_missing_vars(step3_result, threshold=30.0)
+                                
+                                cat_vars = ['gender', 'marital_status', 'residence_type']
+                                freq_tables = step4_categorical_frequencies(input_df, cat_vars)
+                                
+                                result = {
+                                    'high_missing': high_missing,
+                                    'freq_tables': freq_tables
+                                }
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
                                 st.success(f"Step {step['number']} executed successfully!")
                                 st.rerun()
                         
-                        elif step['number'] == 3:
-                            if 1 not in st.session_state.step_results or 0 not in st.session_state.step_results:
-                                st.error("Please execute Steps 1 and 2 first.")
+                        # Special handling for Step 7
+                        elif step['number'] == 7:
+                            result = step7_duplicate_columns(input_df, sample_size=1000)
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                        
+                        # Special handling for Step 8
+                        elif step['number'] == 8:
+                            # Get duplicate list from Step 7
+                            if 6 not in st.session_state.step_results:
+                                st.error("Please execute Step 7 first to detect duplicate columns.")
                             else:
-                                step2_result = st.session_state.step_results[1]
-                                step1_result = st.session_state.step_results[0]
-                                total_n = step1_result._total_n
-                                result = step['function'](step2_result, total_n)
+                                step7_result = st.session_state.step_results[6]
+                                columns_to_drop = step7_get_duplicate_list(step7_result)
+                                
+                                result = step8_drop_duplicates(input_df, columns_to_drop)
+                                st.session_state.step_results[current_step_idx] = {
+                                    'cleaned_data': result,
+                                    'columns_dropped': columns_to_drop
+                                }
+                                
+                                # Ensure data directory exists
+                                data_dir = current_dir / "data"
+                                data_dir.mkdir(parents=True, exist_ok=True)
+                                
+                                # Save output CSV file
+                                output_file = data_dir / "var_metadata_output.csv"
+                                result.to_csv(output_file, index=False)
+                                
+                                # Save as feat_eng_data.csv for next step (permanent file, overwrites each run)
+                                feat_eng_file = data_dir / "feat_eng_data.csv"
+                                result.to_csv(feat_eng_file, index=False)
+                                
+                                # Create and save metadata dictionary
+                                metadata_dict = create_metadata_dictionary(
+                                    st.session_state.input_data,
+                                    st.session_state.step_results
+                                )
+                                metadata_file = data_dir / "var_metadata_dictionary.csv"
+                                metadata_dict.to_csv(metadata_file, index=False)
+                                
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv and feat_eng_data.csv. Metadata dictionary saved to var_metadata_dictionary.csv")
+                                st.rerun()
+                        
+                        # Special handling for Step 9
+                        elif step['number'] == 9:
+                            # Step 9 requires customer master (optional)
+                            result = step9_orphan_records(input_df, customer_master=None)
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                        
+                        # Standard steps
+                        elif step['function'] is not None:
+                            # Steps 1-3 need special handling for dependencies
+                            if step['number'] == 1:
+                                result = step['function'](input_df)
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
                                 st.success(f"Step {step['number']} executed successfully!")
                                 st.rerun()
-                        
-                        elif step['number'] == 5:
-                            vars_list = ['bureau_score', 'emi_to_income_ratio', 'monthly_income']
-                            result = step['function'](input_df, vars_list)
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
-                            st.rerun()
-                        
-                        elif step['number'] == 6:
-                            cat_vars = ['gender', 'marital_status', 'residence_type']
-                            result = step['function'](input_df, cat_vars)
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
-                            st.rerun()
-                
-                except Exception as e:
-                    st.error(f"Error executing step: {str(e)}")
-                    st.exception(e)
+                            
+                            elif step['number'] == 2:
+                                if 0 not in st.session_state.step_results:
+                                    st.error("Please execute Step 1 first.")
+                                else:
+                                    step1_result = st.session_state.step_results[0]
+                                    result = step['function'](step1_result)
+                                    st.session_state.step_results[current_step_idx] = result
+                                    st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                    st.success(f"Step {step['number']} executed successfully!")
+                                    st.rerun()
+                            
+                            elif step['number'] == 3:
+                                if 1 not in st.session_state.step_results or 0 not in st.session_state.step_results:
+                                    st.error("Please execute Steps 1 and 2 first.")
+                                else:
+                                    step2_result = st.session_state.step_results[1]
+                                    step1_result = st.session_state.step_results[0]
+                                    total_n = step1_result._total_n
+                                    result = step['function'](step2_result, total_n)
+                                    st.session_state.step_results[current_step_idx] = result
+                                    st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                    st.success(f"Step {step['number']} executed successfully!")
+                                    st.rerun()
+                            
+                            elif step['number'] == 5:
+                                vars_list = ['bureau_score', 'emi_to_income_ratio', 'monthly_income']
+                                result = step['function'](input_df, vars_list)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully!")
+                                st.rerun()
+                            
+                            elif step['number'] == 6:
+                                cat_vars = ['gender', 'marital_status', 'residence_type']
+                                result = step['function'](input_df, cat_vars)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully!")
+                                st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"Error executing step: {str(e)}")
+                        st.exception(e)
     
     # Display results if step has been executed
     if current_step_idx in st.session_state.step_results:

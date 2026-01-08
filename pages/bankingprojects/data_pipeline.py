@@ -454,27 +454,49 @@ def main():
     # Execute stage button
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("▶️ Execute Stage", type="primary", disabled=(current_stage_idx in st.session_state.stage_results)):
-            with st.spinner(f"Executing Stage {stage['number']}..."):
-                try:
-                    # Get input data
-                    if current_stage_idx == 0:
-                        input_df = st.session_state.raw_data.copy()
-                    else:
-                        input_df = st.session_state.stage_results[current_stage_idx - 1].copy()
-                    
-                    # Execute stage function
-                    result_df = stage['function'](input_df)
-                    
-                    # Store result
-                    st.session_state.stage_results[current_stage_idx] = result_df
-                    st.session_state.current_stage = min(current_stage_idx + 1, len(STAGES) - 1)
-                    
-                    st.success(f"Stage {stage['number']} executed successfully!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error executing stage: {str(e)}")
-                    st.exception(e)
+        is_final_stage = current_stage_idx == len(STAGES) - 1
+        all_stages_completed = len(st.session_state.stage_results) == len(STAGES)
+        execute_disabled = current_stage_idx in st.session_state.stage_results
+        
+        # Change button text for final stage when all stages are completed
+        if is_final_stage and all_stages_completed:
+            if st.button("Proceed to next Analysis", type="primary", disabled=False):
+                # Navigate to var_metadata_analysis.py
+                st.query_params.update({"project": "var_metadata_analysis.py"})
+                st.rerun()
+        else:
+            if st.button("▶️ Execute Stage", type="primary", disabled=execute_disabled):
+                with st.spinner(f"Executing Stage {stage['number']}..."):
+                    try:
+                        # Get input data
+                        if current_stage_idx == 0:
+                            input_df = st.session_state.raw_data.copy()
+                        else:
+                            input_df = st.session_state.stage_results[current_stage_idx - 1].copy()
+                        
+                        # Execute stage function
+                        result_df = stage['function'](input_df)
+                        
+                        # Store result
+                        st.session_state.stage_results[current_stage_idx] = result_df
+                        
+                        # Save output to var_metadata_input.csv if final stage
+                        if is_final_stage:
+                            data_dir = current_dir / "data"
+                            data_dir.mkdir(parents=True, exist_ok=True)
+                            output_file = data_dir / "var_metadata_input.csv"
+                            result_df.to_csv(output_file, index=False)
+                        
+                        st.session_state.current_stage = min(current_stage_idx + 1, len(STAGES) - 1)
+                        
+                        if is_final_stage:
+                            st.success(f"Stage {stage['number']} executed successfully! Output saved to var_metadata_input.csv")
+                        else:
+                            st.success(f"Stage {stage['number']} executed successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error executing stage: {str(e)}")
+                        st.exception(e)
     
     # Display results if stage has been executed
     if current_stage_idx in st.session_state.stage_results:
