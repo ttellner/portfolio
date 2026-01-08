@@ -390,8 +390,11 @@ def main():
     the "database" is a csv file with 37 primary features that are used to derive ~ 231 new features.
     Data has been created by Sameer Shaikh for his book, "SAS Credit Risk Modelling - A to Z for PD Models".
     
+    Note: The data has already been split into training and testing data. All stages demonstrated in the pipeline are applied to the only training data.
+    The testing data also file will be used later and all applicable engineering will have already been applied to it to align it with the training data.
+    
     **Instructions:**
-    1. Load the raw data file (PD_RAW_VARIABLES.csv)
+    1. Load the raw data file (PD_RAW_VARIABLES.csv). This data is from the "Observation period", aka the training data. 
     2. Execute each stage sequentially
     3. View the code and output for each stage
     4. Track the creation of derived variables and dummy variables

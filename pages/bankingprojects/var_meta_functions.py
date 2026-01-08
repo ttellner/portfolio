@@ -1,6 +1,5 @@
 """
 Variable Metadata Analysis Functions
-Python conversion of SAS variable metadata analysis code.
 Contains functions for each step of the variable analysis pipeline.
 """
 

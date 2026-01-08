@@ -381,6 +381,8 @@ def main():
     This application analyzes variable metadata, missing values, duplicates, and data quality.
     It takes the final output from the data pipeline and performs various quality checks.
     
+    NOTE: This project works on the training data as engineered in Step 1: Data Pipeline. 
+    
     **Instructions:**
     1. Default data (var_metadata_input.csv with 268 columns) is loaded automatically
     2. Execute each step sequentially
@@ -514,6 +516,10 @@ def main():
                             output_file = current_dir / "data" / "var_metadata_output.csv"
                             result.to_csv(output_file, index=False)
                             
+                            # Save as feat_eng_data.csv for next step
+                            feat_eng_file = current_dir / "data" / "feat_eng_data.csv"
+                            result.to_csv(feat_eng_file, index=False)
+                            
                             # Create and save metadata dictionary
                             metadata_dict = create_metadata_dictionary(
                                 st.session_state.input_data,
@@ -523,7 +529,7 @@ def main():
                             metadata_dict.to_csv(metadata_file, index=False)
                             
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv. Metadata dictionary saved to var_metadata_dictionary.csv")
+                            st.success(f"Step {step['number']} executed successfully! Dropped {len(columns_to_drop)} columns. Output saved to var_metadata_output.csv and feat_eng_data.csv. Metadata dictionary saved to var_metadata_dictionary.csv")
                             st.rerun()
                     
                     # Special handling for Step 9

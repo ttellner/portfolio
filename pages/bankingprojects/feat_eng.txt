@@ -1,0 +1,162 @@
+/* Step 1 */
+%let obs_start = '01JAN2022'd;
+%let obs_end = '31DEC2022'd;
+%let perf_start = '01JAN2023'd;
+%let obs_start = '30JUN2023'd;
+
+data work.pd_base;
+   set credit.txn_stage_final_model_cleaned;
+   where snapshot_date between &obs_start and &obs_end;
+
+data work.pd_model_population;
+    set work.pd_base;
+
+    /* Exclusion rules */
+    if write_off_flag = 1 then delete;
+    if monthly_income <= 0 then delete;
+    if application_date > snapshot_date then delete;
+    if tenure_months < 3 then delete;
+
+    /* Optional: Add more based on flags */
+    /* if fraud_flag = 1 then delete; */
+run;
+
+proc freq data=work.pd_model_population;
+    tables default_flag / nocum;
+run;
+
+proc means data=work.pd_model_population n mean min max;
+    var monthly_income age bureau_score dpd_avg tenure_months;
+run;
+
+data credit.pd_model_data_final;
+    set work.pd_model_population;
+run;
+
+/* Step 2 */
+data CREDIT.PD_MODEL_DATA_CH9_FEATURES;
+    set CREDIT.PD_MODEL_DATA_FINAL;
+
+    /* Initialize counts */
+    dpd_0to30_freq = 0;
+    dpd_31to60_freq = 0;
+    dpd_61plus_freq = 0;
+
+    array dpd_vars{12} dpd_m1-dpd_m12;
+
+    /* Loop through all 12 months of DPD */
+    do i = 1 to 12;
+        if 1 <= dpd_vars{i} <= 30 then dpd_0to30_freq + 1;
+        else if 31 <= dpd_vars{i} <= 60 then dpd_31to60_freq + 1;
+        else if dpd_vars{i} >= 61 then dpd_61plus_freq + 1;
+    end;
+
+    /* Recent delinquency flag */
+    if max(of dpd_m1-dpd_m3) > 0 then dpd_recent_flag = 1;
+    else dpd_recent_flag = 0;
+
+    /* Worsening DPD flag */
+    if dpd_m1 > dpd_m2 and dpd_m2 > dpd_m3 then dpd_worsening_flag = 1;
+    else dpd_worsening_flag = 0;
+
+    /* Average utilization (last 3 months) */
+    avg_util_3m = mean(of util_m1-util_m3);
+
+    /* EMI to income ratio */
+    emi_to_income_ratio = total_emi / monthly_income;
+
+    /* Loan tenure bucket */
+    if loan_tenure < 12 then loan_tenure_bucket = "Short";
+    else if loan_tenure < 36 then loan_tenure_bucket = "Medium";
+    else loan_tenure_bucket = "Long";
+
+    /* Age band */
+    if age < 25 then age_band = "<25";
+    else if age <= 35 then age_band = "25-35";
+    else if age <= 50 then age_band = "36-50";
+    else age_band = "50+";
+
+    /* Salary credit flag */
+    if sum(of salary_credit_m1-salary_credit_m3) > 0 then salary_credit_flag = 1;
+    else salary_credit_flag = 0;
+
+    /* Bounce count (last 3 months) */
+    bounce_3m_count = sum(of bounce_m1-bounce_m3);
+
+    /* Ratio of DPD to bureau score */
+    dpd_to_bureau_ratio = max(of dpd_m1-dpd_m12) / (900 - bureau_score);
+
+    drop i; /* remove loop index */
+run;
+
+/* Step 3: Calculate Mean & Median for Imputation */
+proc means data=CREDIT.PD_MODEL_DATA_CH9_FEATURES noprint;
+    var bureau_score total_emi monthly_income;
+    output out=impute_stats
+        mean=bs_mean emi_mean inc_mean
+        median=bs_median emi_median inc_median;
+run;
+
+/* Step 4: Store Median Values in Macro Variables */
+
+data _null_;
+    set impute_stats;
+    call symputx('bs_median', bs_median);
+    call symputx('emi_median', emi_median);
+    call symputx('inc_median', inc_median);
+run;
+
+/* Step 5: Compute 1st and 99th Percentiles for Capping */
+proc univariate data=CREDIT.PD_MODEL_DATA_CH10 noprint;
+    var bureau_score total_emi monthly_income;
+    output out=percentiles
+        p1  = bs_p1 emi_p1 inc_p1
+        p99 = bs_p99 emi_p99 inc_p99;
+run;
+
+/* Step 6: Calculate Percentiles for Outlier Capping */
+proc univariate data=CREDIT.PD_MODEL_DATA_CH9_FEATURES noprint;
+    var bureau_score total_emi monthly_income;
+    output out=percentiles pctlpts=1 99 pctlpre=bs_ emi_ inc_;
+run;
+
+data _null_;
+    set percentiles;
+    call symputx('bs_p1', bs_1);
+    call symputx('bs_p99', bs_99);
+    call symputx('emi_p1', emi_1);
+    call symputx('emi_p99', emi_99);
+    call symputx('inc_p1', inc_1);
+    call symputx('inc_p99', inc_99);
+run;
+
+/* Step 7: Create Final Clean Dataset for Chapter 10 */
+data CREDIT.PD_MODEL_DATA_CH10_CLEAN;
+    set CREDIT.PD_MODEL_DATA_CH9_FEATURES;
+
+/* Missing Flags – Must be before Imputation */
+bureau_score_miss_flag = (missing(bureau_score));
+total_emi_miss_flag = (missing(total_emi));
+monthly_income_miss_flag = (missing(monthly_income));
+
+    /* ---------------- Missing Value Imputation ---------------- */
+    if missing(bureau_score) then bureau_score = &bs_median;
+    if missing(total_emi) then total_emi = &emi_median;
+    if missing(monthly_income) then monthly_income = &inc_median;
+
+    /* ---------------- Create Missing Flags ---------------- */
+    bureau_score_miss_flag = (bureau_score = .);
+    total_emi_miss_flag = (total_emi = .);
+    monthly_income_miss_flag = (monthly_income = .);
+
+    /* ---------------- Outlier Capping ---------------- */
+    if bureau_score < &bs_p1 then bureau_score = &bs_p1;
+    else if bureau_score > &bs_p99 then bureau_score = &bs_p99;
+
+    if total_emi < &emi_p1 then total_emi = &emi_p1;
+    else if total_emi > &emi_p99 then total_emi = &emi_p99;
+
+    if monthly_income < &inc_p1 then monthly_income = &inc_p1;
+    else if monthly_income > &inc_p99 then monthly_income = &inc_p99;
+
+run;
