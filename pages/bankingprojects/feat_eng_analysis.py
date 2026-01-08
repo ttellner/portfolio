@@ -259,8 +259,10 @@ def main():
                 if st.button(f"{status} Step {step['number']}: {step['name']}", 
                             key=f"nav_{i}",
                             disabled=(i > st.session_state.current_step)):
-                    st.session_state.current_step = i
-                    st.rerun()
+                    # Ensure index is valid before setting
+                    if 0 <= i < len(STEPS):
+                        st.session_state.current_step = i
+                        st.rerun()
             
             st.markdown("---")
             if st.button("Reset All Steps"):
@@ -292,6 +294,20 @@ def main():
     
     # Display current step
     current_step_idx = st.session_state.current_step
+    
+    # Ensure STEPS is not empty
+    if len(STEPS) == 0:
+        st.error("No steps defined. Please check the STEPS configuration.")
+        return
+    
+    # Ensure current_step_idx is within valid range
+    if current_step_idx >= len(STEPS):
+        current_step_idx = len(STEPS) - 1
+        st.session_state.current_step = current_step_idx
+    elif current_step_idx < 0:
+        current_step_idx = 0
+        st.session_state.current_step = current_step_idx
+    
     step = STEPS[current_step_idx]
     
     # Step information
