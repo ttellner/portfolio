@@ -289,3 +289,82 @@ def step7_apply_imputation_and_capping(df: pd.DataFrame,
     
     return df
 
+
+def step8_calculate_eda_measures(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Step 8: Calculate EDA measures including descriptive statistics, deciles, and good/bad counts.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input dataframe
+    
+    Returns:
+    --------
+    pd.DataFrame : Dataframe with additional measures calculated
+    """
+    df = df.copy()
+    
+    # Create bureau_score deciles if bureau_score exists
+    if 'bureau_score' in df.columns:
+        # Create deciles (10 groups) using qcut
+        try:
+            df['bureau_decile'] = pd.qcut(
+                df['bureau_score'],
+                q=10,
+                labels=False,
+                duplicates='drop'
+            )
+        except ValueError:
+            # If qcut fails due to duplicates, use rank-based approach
+            df['bureau_decile'] = pd.qcut(
+                df['bureau_score'].rank(method='first'),
+                q=10,
+                labels=False,
+                duplicates='drop'
+            )
+        
+        # Fill any NaN values with -1 (for cases where qcut fails)
+        df['bureau_decile'] = df['bureau_decile'].fillna(-1).astype(int)
+    
+    return df
+
+
+def calculate_iv_by_decile(df: pd.DataFrame, decile_col: str = 'bureau_decile', 
+                           target_col: str = 'default_flag') -> pd.DataFrame:
+    """
+    Calculate Information Value (IV) statistics by decile.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input dataframe
+    decile_col : str
+        Column name for decile grouping
+    target_col : str
+        Column name for target variable (default flag)
+    
+    Returns:
+    --------
+    pd.DataFrame : Summary table with decile, bad count, good count
+    """
+    if decile_col not in df.columns or target_col not in df.columns:
+        return pd.DataFrame()
+    
+    # Calculate good/bad counts by decile
+    iv_data = []
+    for decile in sorted(df[decile_col].dropna().unique()):
+        if decile == -1:  # Skip invalid deciles
+            continue
+        decile_data = df[df[decile_col] == decile]
+        bad_count = int(decile_data[target_col].sum()) if target_col in decile_data.columns else 0
+        good_count = len(decile_data) - bad_count
+        
+        iv_data.append({
+            decile_col: int(decile),
+            'bad': bad_count,
+            'good': good_count
+        })
+    
+    return pd.DataFrame(iv_data)
+

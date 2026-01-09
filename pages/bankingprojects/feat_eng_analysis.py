@@ -20,7 +20,9 @@ from feat_eng_functions import (
     step2_create_features,
     step3_calculate_impute_stats,
     step6_calculate_percentiles,
-    step7_apply_imputation_and_capping
+    step7_apply_imputation_and_capping,
+    step8_calculate_eda_measures,
+    calculate_iv_by_decile
 )
 
 # Page configuration
@@ -194,6 +196,23 @@ df.loc[df['total_emi'] > emi_p99, 'total_emi'] = emi_p99
 df.loc[df['monthly_income'] < inc_p1, 'monthly_income'] = inc_p1
 df.loc[df['monthly_income'] > inc_p99, 'monthly_income'] = inc_p99
 '''
+    },
+    {
+        'number': 6,
+        'name': 'Calculate EDA Measures',
+        'description': 'Calculates descriptive statistics, creates bureau_score deciles, and calculates good/bad counts by decile.',
+        'function': step8_calculate_eda_measures,
+        'code': '''
+# Create bureau_score deciles
+df['bureau_decile'] = pd.qcut(df['bureau_score'], q=10, labels=False, duplicates='drop')
+
+# Calculate good/bad counts by decile
+iv_table = df.groupby('bureau_decile').agg({
+    'default_flag': ['sum', 'count']
+}).reset_index()
+iv_table.columns = ['bureau_decile', 'bad', 'total']
+iv_table['good'] = iv_table['total'] - iv_table['bad']
+'''
     }
 ]
 
@@ -292,17 +311,17 @@ def main():
                 st.session_state.step_results = {}
                 st.rerun()
             
-            # Download button for output CSV (only show if Step 5 is completed)
-            if 4 in st.session_state.step_results:
+            # Download button for output CSV (only show if Step 6 is completed)
+            if 5 in st.session_state.step_results:
                 st.markdown("---")
                 st.header("Download Results")
-                output_file = current_dir / "data" / "feat_eng_output.csv"
-                if output_file.exists():
-                    with open(output_file, 'rb') as f:
+                woe_file = current_dir / "data" / "woe_ready.csv"
+                if woe_file.exists():
+                    with open(woe_file, 'rb') as f:
                         st.download_button(
-                            label="Download feat_eng_output.csv",
+                            label="Download woe_ready.csv",
                             data=f.read(),
-                            file_name="feat_eng_output.csv",
+                            file_name="woe_ready.csv",
                             mime="text/csv",
                             use_container_width=True
                         )
@@ -457,13 +476,36 @@ def main():
                                 output_file = data_dir / "feat_eng_output.csv"
                                 result.to_csv(output_file, index=False)
                                 
-                                # Save as eda_data.csv for next step (permanent file, overwrites each run)
-                                eda_file = data_dir / "eda_data.csv"
-                                result.to_csv(eda_file, index=False)
-                                
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv and eda_data.csv")
+                                st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv")
+                                st.rerun()
+                        
+                        # Step 6: Calculate EDA measures
+                        elif step['number'] == 6:
+                            if 4 not in st.session_state.step_results:
+                                st.error("Please execute Step 5 first.")
+                            else:
+                                step5_result = st.session_state.step_results[4]
+                                result = step8_calculate_eda_measures(step5_result)
+                                
+                                # Calculate IV table by decile
+                                iv_table = calculate_iv_by_decile(result, 'bureau_decile', 'default_flag')
+                                
+                                # Ensure data directory exists
+                                data_dir = current_dir / "data"
+                                data_dir.mkdir(parents=True, exist_ok=True)
+                                
+                                # Save as woe_ready.csv for next step (permanent file, overwrites each run)
+                                woe_file = data_dir / "woe_ready.csv"
+                                result.to_csv(woe_file, index=False)
+                                
+                                st.session_state.step_results[current_step_idx] = {
+                                    'data': result,
+                                    'iv_table': iv_table
+                                }
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully! Output saved to woe_ready.csv")
                                 st.rerun()
                     
                     except Exception as e:
@@ -553,6 +595,46 @@ def main():
                         'Missing Count': [result[col].sum() for col in miss_flag_cols]
                     })
                     st.dataframe(miss_summary, use_container_width=True)
+                
+                st.subheader("Final Data Preview (First 10 Rows)")
+                st.dataframe(result.head(10), use_container_width=True)
+        
+        # Step 6 special display
+        elif step['number'] == 6:
+            if isinstance(result, dict):
+                result_data = result.get('data', pd.DataFrame())
+                iv_table = result.get('iv_table', pd.DataFrame())
+                
+                st.subheader("EDA Measures Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Rows", f"{len(result_data):,}")
+                with col2:
+                    st.metric("Columns", f"{len(result_data.columns):,}")
+                
+                # Show descriptive statistics
+                if 'bureau_score' in result_data.columns:
+                    st.subheader("Descriptive Statistics")
+                    desc_vars = ['bureau_score', 'total_emi', 'monthly_income', 'dpd_max']
+                    available_desc_vars = [v for v in desc_vars if v in result_data.columns]
+                    if available_desc_vars:
+                        desc_stats = result_data[available_desc_vars].describe()
+                        st.dataframe(desc_stats, use_container_width=True)
+                
+                # Show IV table by decile
+                if not iv_table.empty:
+                    st.subheader("Good/Bad Counts by Bureau Score Decile")
+                    st.dataframe(iv_table, use_container_width=True)
+                
+                st.subheader("Final Data Preview (First 10 Rows)")
+                st.dataframe(result_data.head(10), use_container_width=True)
+            elif isinstance(result, pd.DataFrame):
+                st.subheader("EDA Measures Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Rows", f"{len(result):,}")
+                with col2:
+                    st.metric("Columns", f"{len(result.columns):,}")
                 
                 st.subheader("Final Data Preview (First 10 Rows)")
                 st.dataframe(result.head(10), use_container_width=True)
@@ -672,6 +754,25 @@ def main():
             summary_table = pd.DataFrame({
                 'Metric': ['Final Rows', 'Final Columns', 'Missing Flags Created'],
                 'Count': [len(step5_result), len(step5_result.columns), len(miss_flag_cols)]
+            })
+            st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 6 summary
+        if 5 in st.session_state.step_results:
+            step6_result = st.session_state.step_results[5]
+            if isinstance(step6_result, dict):
+                step6_data = step6_result.get('data', pd.DataFrame())
+                iv_table = step6_result.get('iv_table', pd.DataFrame())
+            else:
+                step6_data = step6_result
+                iv_table = pd.DataFrame()
+            
+            st.markdown("##### Step 6: Calculate EDA Measures")
+            summary_table = pd.DataFrame({
+                'Metric': ['Final Rows', 'Final Columns', 'Deciles Created', 'IV Table Rows'],
+                'Count': [len(step6_data), len(step6_data.columns), 
+                        1 if 'bureau_decile' in step6_data.columns else 0,
+                        len(iv_table)]
             })
             st.dataframe(summary_table, use_container_width=True, hide_index=True)
 

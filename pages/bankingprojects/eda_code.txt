@@ -1,0 +1,19 @@
+proc means data=CREDIT.PD_MODEL_DATA_CH10_CLEAN n nmiss mean median min max p25 p50 p75;
+    var bureau_score total_emi monthly_income dpd_max;
+run;
+/* Rank bureau_score into deciles */
+
+proc rank data=CREDIT.PD_MODEL_DATA_CH10_CLEAN groups=10 out=ranked_bureau;
+    var bureau_score;
+    ranks bureau_decile;
+run;
+
+/* Calculate good/bad counts in each decile */
+proc sql;
+    create table iv_bureau as
+    select bureau_decile,
+           sum(default_flag) as bad,
+           count(*)-sum(default_flag) as good
+    from ranked_bureau
+    group by bureau_decile;
+quit;
