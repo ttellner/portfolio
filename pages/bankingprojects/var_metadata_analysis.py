@@ -375,6 +375,14 @@ def display_step_info(step):
 
 def main():
     """Main application."""
+    # Scroll to top on page load if scroll parameter is present
+    if st.query_params.get("scroll") == "top":
+        st.components.v1.html("""
+        <script>
+            window.scrollTo(0, 0);
+        </script>
+        """, height=0)
+    
     st.markdown('<h1 class="main-header">Variable Metadata Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -469,8 +477,8 @@ def main():
         # Change button text for final step when all steps are completed
         if is_final_step and all_steps_completed:
             if st.button("Proceed to next Analysis", type="primary", disabled=False):
-                # Navigate to feat_eng_analysis.py
-                st.query_params.update({"project": "feat_eng_analysis.py"})
+                # Navigate to feat_eng_analysis.py with scroll parameter
+                st.query_params.update({"project": "feat_eng_analysis.py", "scroll": "top"})
                 st.rerun()
         else:
             if st.button("Execute Step", type="primary", disabled=execute_disabled):

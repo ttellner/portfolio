@@ -219,6 +219,14 @@ def display_step_info(step):
 
 def main():
     """Main application."""
+    # Scroll to top on page load if scroll parameter is present
+    if st.query_params.get("scroll") == "top":
+        st.components.v1.html("""
+        <script>
+            window.scrollTo(0, 0);
+        </script>
+        """, height=0)
+    
     st.markdown('<h1 class="main-header">Feature Engineering Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -341,36 +349,36 @@ def main():
         else:
             button_text = "Execute Step"
             if st.button(button_text, type="primary", disabled=execute_disabled):
-            with st.spinner(f"Executing Step {step['number']}..."):
-                try:
-                    input_df = st.session_state.input_data.copy()
-                    
-                    # Step 1: Filter by dates and apply exclusions
-                    if step['number'] == 1:
-                        # Filter by dates
-                        df_filtered = step1_filter_by_dates(
-                            input_df,
-                            obs_start=str(obs_start),
-                            obs_end=str(obs_end)
-                        )
+                with st.spinner(f"Executing Step {step['number']}..."):
+                    try:
+                        input_df = st.session_state.input_data.copy()
                         
-                        # Apply exclusions
-                        df_result, excluded_count = step1_apply_exclusions(df_filtered)
+                        # Step 1: Filter by dates and apply exclusions
+                        if step['number'] == 1:
+                            # Filter by dates
+                            df_filtered = step1_filter_by_dates(
+                                input_df,
+                                obs_start=str(obs_start),
+                                obs_end=str(obs_end)
+                            )
+                            
+                            # Apply exclusions
+                            df_result, excluded_count = step1_apply_exclusions(df_filtered)
+                            
+                            result = {
+                                'filtered_data': df_result,
+                                'excluded_count': excluded_count,
+                                'initial_count': len(input_df),
+                                'final_count': len(df_result)
+                            }
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully! Excluded {excluded_count:,} records.")
+                            st.rerun()
                         
-                        result = {
-                            'filtered_data': df_result,
-                            'excluded_count': excluded_count,
-                            'initial_count': len(input_df),
-                            'final_count': len(df_result)
-                        }
-                        st.session_state.step_results[current_step_idx] = result
-                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                        st.success(f"Step {step['number']} executed successfully! Excluded {excluded_count:,} records.")
-                        st.rerun()
-                    
-                    # Step 2: Create features
-                    elif step['number'] == 2:
-                        if 0 not in st.session_state.step_results:
+                        # Step 2: Create features
+                        elif step['number'] == 2:
+                            if 0 not in st.session_state.step_results:
                             st.error("Please execute Step 1 first.")
                         else:
                             step1_result = st.session_state.step_results[0]
@@ -383,10 +391,10 @@ def main():
                             new_features = [col for col in result.columns if col not in df_input.columns]
                             st.success(f"Step {step['number']} executed successfully! Created {len(new_features)} new features.")
                             st.rerun()
-                    
-                    # Step 3: Calculate imputation statistics
-                    elif step['number'] == 3:
-                        if 1 not in st.session_state.step_results:
+                        
+                        # Step 3: Calculate imputation statistics
+                        elif step['number'] == 3:
+                            if 1 not in st.session_state.step_results:
                             st.error("Please execute Step 2 first.")
                         else:
                             step2_result = st.session_state.step_results[1]
@@ -395,10 +403,10 @@ def main():
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
                             st.success(f"Step {step['number']} executed successfully!")
                             st.rerun()
-                    
-                    # Step 4: Calculate percentiles
-                    elif step['number'] == 4:
-                        if 1 not in st.session_state.step_results:
+                        
+                        # Step 4: Calculate percentiles
+                        elif step['number'] == 4:
+                            if 1 not in st.session_state.step_results:
                             st.error("Please execute Step 2 first.")
                         else:
                             step2_result = st.session_state.step_results[1]
@@ -407,10 +415,10 @@ def main():
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
                             st.success(f"Step {step['number']} executed successfully!")
                             st.rerun()
-                    
-                    # Step 5: Apply imputation and capping
-                    elif step['number'] == 5:
-                        if 1 not in st.session_state.step_results:
+                        
+                        # Step 5: Apply imputation and capping
+                        elif step['number'] == 5:
+                            if 1 not in st.session_state.step_results:
                             st.error("Please execute Step 2 first.")
                         elif 2 not in st.session_state.step_results:
                             st.error("Please execute Step 3 first.")
@@ -443,10 +451,10 @@ def main():
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
                             st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv and eda_data.csv")
                             st.rerun()
-                
-                except Exception as e:
-                    st.error(f"Error executing step: {str(e)}")
-                    st.exception(e)
+                    
+                    except Exception as e:
+                        st.error(f"Error executing step: {str(e)}")
+                        st.exception(e)
     
     # Display results if step has been executed
     if current_step_idx in st.session_state.step_results:

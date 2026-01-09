@@ -382,6 +382,14 @@ def display_dataframe_summary(df, stage_num):
 
 def main():
     """Main application."""
+    # Scroll to top on page load if scroll parameter is present
+    if st.query_params.get("scroll") == "top":
+        st.components.v1.html("""
+        <script>
+            window.scrollTo(0, 0);
+        </script>
+        """, height=0)
+    
     st.markdown('<h1 class="main-header">Data Pipeline - Step by Step Execution</h1>', unsafe_allow_html=True)
     
     st.markdown("""
@@ -461,8 +469,8 @@ def main():
         # Change button text for final stage when all stages are completed
         if is_final_stage and all_stages_completed:
             if st.button("Proceed to next Analysis", type="primary", disabled=False):
-                # Navigate to var_metadata_analysis.py
-                st.query_params.update({"project": "var_metadata_analysis.py"})
+                # Navigate to var_metadata_analysis.py with scroll parameter
+                st.query_params.update({"project": "var_metadata_analysis.py", "scroll": "top"})
                 st.rerun()
         else:
             if st.button("▶️ Execute Stage", type="primary", disabled=execute_disabled):
