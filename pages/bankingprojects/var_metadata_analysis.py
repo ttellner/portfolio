@@ -377,11 +377,25 @@ def main():
     """Main application."""
     # Scroll to top on page load if scroll parameter is present
     if st.query_params.get("scroll") == "top":
-        st.components.v1.html("""
+        st.markdown("""
         <script>
-            window.scrollTo(0, 0);
+            (function() {
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                }, 50);
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                }, 200);
+            })();
         </script>
-        """, height=0)
+        """, unsafe_allow_html=True)
     
     st.markdown('<h1 class="main-header">Variable Metadata Analysis</h1>', unsafe_allow_html=True)
     

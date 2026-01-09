@@ -221,11 +221,25 @@ def main():
     """Main application."""
     # Scroll to top on page load if scroll parameter is present
     if st.query_params.get("scroll") == "top":
-        st.components.v1.html("""
+        st.markdown("""
         <script>
-            window.scrollTo(0, 0);
+            (function() {
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                }, 50);
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                }, 200);
+            })();
         </script>
-        """, height=0)
+        """, unsafe_allow_html=True)
     
     st.markdown('<h1 class="main-header">Feature Engineering Analysis</h1>', unsafe_allow_html=True)
     
@@ -379,78 +393,78 @@ def main():
                         # Step 2: Create features
                         elif step['number'] == 2:
                             if 0 not in st.session_state.step_results:
-                            st.error("Please execute Step 1 first.")
-                        else:
-                            step1_result = st.session_state.step_results[0]
-                            df_input = step1_result['filtered_data']
-                            result = step2_create_features(df_input)
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            
-                            # Count new features created
-                            new_features = [col for col in result.columns if col not in df_input.columns]
-                            st.success(f"Step {step['number']} executed successfully! Created {len(new_features)} new features.")
-                            st.rerun()
+                                st.error("Please execute Step 1 first.")
+                            else:
+                                step1_result = st.session_state.step_results[0]
+                                df_input = step1_result['filtered_data']
+                                result = step2_create_features(df_input)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                
+                                # Count new features created
+                                new_features = [col for col in result.columns if col not in df_input.columns]
+                                st.success(f"Step {step['number']} executed successfully! Created {len(new_features)} new features.")
+                                st.rerun()
                         
                         # Step 3: Calculate imputation statistics
                         elif step['number'] == 3:
                             if 1 not in st.session_state.step_results:
-                            st.error("Please execute Step 2 first.")
-                        else:
-                            step2_result = st.session_state.step_results[1]
-                            result = step3_calculate_impute_stats(step2_result)
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
-                            st.rerun()
+                                st.error("Please execute Step 2 first.")
+                            else:
+                                step2_result = st.session_state.step_results[1]
+                                result = step3_calculate_impute_stats(step2_result)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully!")
+                                st.rerun()
                         
                         # Step 4: Calculate percentiles
                         elif step['number'] == 4:
                             if 1 not in st.session_state.step_results:
-                            st.error("Please execute Step 2 first.")
-                        else:
-                            step2_result = st.session_state.step_results[1]
-                            result = step6_calculate_percentiles(step2_result)
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
-                            st.rerun()
+                                st.error("Please execute Step 2 first.")
+                            else:
+                                step2_result = st.session_state.step_results[1]
+                                result = step6_calculate_percentiles(step2_result)
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully!")
+                                st.rerun()
                         
                         # Step 5: Apply imputation and capping
                         elif step['number'] == 5:
                             if 1 not in st.session_state.step_results:
-                            st.error("Please execute Step 2 first.")
-                        elif 2 not in st.session_state.step_results:
-                            st.error("Please execute Step 3 first.")
-                        elif 3 not in st.session_state.step_results:
-                            st.error("Please execute Step 4 first.")
-                        else:
-                            step2_result = st.session_state.step_results[1]
-                            impute_stats = st.session_state.step_results[2]
-                            percentiles = st.session_state.step_results[3]
-                            
-                            result = step7_apply_imputation_and_capping(
-                                step2_result,
-                                impute_stats,
-                                percentiles
-                            )
-                            
-                            # Ensure data directory exists
-                            data_dir = current_dir / "data"
-                            data_dir.mkdir(parents=True, exist_ok=True)
-                            
-                            # Save output CSV file
-                            output_file = data_dir / "feat_eng_output.csv"
-                            result.to_csv(output_file, index=False)
-                            
-                            # Save as eda_data.csv for next step (permanent file, overwrites each run)
-                            eda_file = data_dir / "eda_data.csv"
-                            result.to_csv(eda_file, index=False)
-                            
-                            st.session_state.step_results[current_step_idx] = result
-                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv and eda_data.csv")
-                            st.rerun()
+                                st.error("Please execute Step 2 first.")
+                            elif 2 not in st.session_state.step_results:
+                                st.error("Please execute Step 3 first.")
+                            elif 3 not in st.session_state.step_results:
+                                st.error("Please execute Step 4 first.")
+                            else:
+                                step2_result = st.session_state.step_results[1]
+                                impute_stats = st.session_state.step_results[2]
+                                percentiles = st.session_state.step_results[3]
+                                
+                                result = step7_apply_imputation_and_capping(
+                                    step2_result,
+                                    impute_stats,
+                                    percentiles
+                                )
+                                
+                                # Ensure data directory exists
+                                data_dir = current_dir / "data"
+                                data_dir.mkdir(parents=True, exist_ok=True)
+                                
+                                # Save output CSV file
+                                output_file = data_dir / "feat_eng_output.csv"
+                                result.to_csv(output_file, index=False)
+                                
+                                # Save as eda_data.csv for next step (permanent file, overwrites each run)
+                                eda_file = data_dir / "eda_data.csv"
+                                result.to_csv(eda_file, index=False)
+                                
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully! Output saved to feat_eng_output.csv and eda_data.csv")
+                                st.rerun()
                     
                     except Exception as e:
                         st.error(f"Error executing step: {str(e)}")
