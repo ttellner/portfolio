@@ -377,8 +377,10 @@ def main():
         # Change button text for final step when all steps are completed
         if is_final_step and all_steps_completed:
             button_text = "Proceed to next Analysis"
-            if st.button(button_text, type="primary", disabled=True):
-                pass  # Disabled for now as requested
+            if st.button(button_text, type="primary", disabled=False):
+                # Navigate to iv_woe_analysis.py with scroll parameter
+                st.query_params.update({"project": "iv_woe_analysis.py", "scroll": "top"})
+                st.rerun()
         else:
             button_text = "Execute Step"
             if st.button(button_text, type="primary", disabled=execute_disabled):

@@ -1,0 +1,96 @@
+/* 1 Get list of numeric variables except default_flag */
+proc contents data=CREDIT.PD_MODEL_DATA_CH10_CLEAN out=var_list(keep=name type) noprint;
+run;
+
+proc sql;
+    create table numeric_vars as
+    select name
+    from var_list
+    where type=1 and upcase(name) ne 'DEFAULT_FLAG';
+quit;
+
+/* 2  Create empty IV summary table with correct structure */
+data iv_summary;
+    length variable $50. IV 8.;
+    stop;
+run;
+
+/* 3 Create macro variables for looping */
+data _null_;
+    set numeric_vars end=last;
+    call symputx(cats('var',_n_), name);
+    if last then call symputx('total_vars', _n_);
+run;
+
+%put Total Variables = &total_vars;
+
+/* 4 Loop through all variables */
+%macro calc_woe_iv_all;
+    %do i=1 %to &total_vars;
+        %let var = &&var&i;
+
+        /* Create 10 bins for variable */
+        proc rank data=CREDIT.PD_MODEL_DATA_CH10_CLEAN groups=10 out=ranked;
+            var &var;
+            ranks bin;
+        run;
+
+        /* Good/Bad counts */
+        proc sql;
+            create table stats as
+            select bin,
+                   sum((default_flag=1)) as bad,  /* BAD customers */
+                   sum((default_flag=0)) as good  /* GOOD customers */
+            from ranked
+            group by bin;
+        quit;
+
+        /* Total goods/bads */
+        proc sql noprint;
+            select sum(good), sum(bad) into :tot_good, :tot_bad from stats;
+        quit;
+
+        /* WoE & IV components */
+        data stats_woe;
+            set stats;
+            pct_good = good / &tot_good;
+            pct_bad  = bad / &tot_bad;
+
+            if pct_good=0 then pct_good=0.0001;
+            if pct_bad=0 then pct_bad=0.0001;
+
+            woe = log(pct_good / pct_bad);
+            iv_component = (pct_good - pct_bad) * woe;
+            length variable $50.;
+            variable = "&var";
+        run;
+
+        /* Get IV value */
+        proc sql noprint;
+            select sum(iv_component) into :iv from stats_woe;
+        quit;
+
+        /* Append IV to summary with correct structure */
+        data temp;
+            length variable $50. IV 8.;
+            variable="&var";
+            IV=&iv;
+        run;
+
+        proc append base=iv_summary data=temp force; run;
+
+        /* Append WoE table for all variables */
+        proc append base=woe_all data=stats_woe force; run;
+
+    %end;
+%mend;
+
+%calc_woe_iv_all;
+
+/* 5 Final IV Summary */
+proc print data=iv_summary;
+run;
+proc rank data=CREDIT.PD_MODEL_DATA_CH10_CLEAN groups=10 out=ranked;
+    var bureau_score;
+    ranks bureau_decile;
+run;

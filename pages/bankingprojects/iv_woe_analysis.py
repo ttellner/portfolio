@@ -1,0 +1,545 @@
+"""
+IV and WoE Analysis
+Calculates Information Value (IV) and Weight of Evidence (WoE) for numeric variables. Analyzes variable predictive power and creates bin-level statistics.
+"""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+from pathlib import Path
+import sys
+
+# Add current directory to path for imports
+current_dir = Path(__file__).parent.absolute()
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
+
+from iv_woe_functions import (
+    step1_get_numeric_variables,
+    step2_create_iv_summary_structure,
+    step4_calculate_woe_iv_for_variable,
+    step4_calculate_woe_iv_all_variables
+)
+
+# Page configuration
+st.set_page_config(
+    page_title="IV and WoE Analysis",
+    page_icon="",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS
+st.markdown("""
+    <style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .stage-header {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-top: 2rem;
+        margin-bottom: 1rem;
+        padding: 0.5rem;
+        background-color: #ecf0f1;
+        border-left: 4px solid #3498db;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Reset session state when navigating to this page
+current_page = st.query_params.get("project", "")
+last_page = st.session_state.get("last_page_iv_woe", "")
+
+if current_page == "iv_woe_analysis.py" and last_page != "iv_woe_analysis.py":
+    # Coming to this page fresh - reset state
+    if 'input_data' in st.session_state:
+        del st.session_state.input_data
+    if 'step_results' in st.session_state:
+        del st.session_state.step_results
+    if 'current_step' in st.session_state:
+        del st.session_state.current_step
+
+st.session_state.last_page_iv_woe = current_page
+
+# Initialize session state
+if 'input_data' not in st.session_state:
+    st.session_state.input_data = None
+if 'current_step' not in st.session_state:
+    st.session_state.current_step = 0
+if 'step_results' not in st.session_state:
+    st.session_state.step_results = {}
+
+# Step definitions with descriptions and code snippets
+STEPS = [
+    {
+        'number': 1,
+        'name': 'Get Numeric Variables',
+        'description': 'Identifies all numeric variables in the dataset, excluding the target variable (default_flag).',
+        'function': step1_get_numeric_variables,
+        'code': '''
+# Get numeric variables excluding default_flag
+numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+numeric_vars = [col for col in numeric_cols 
+                if col.upper() != 'DEFAULT_FLAG']
+'''
+    },
+    {
+        'number': 2,
+        'name': 'Create IV Summary Structure',
+        'description': 'Creates an empty IV summary table with the correct structure (variable, IV columns).',
+        'function': step2_create_iv_summary_structure,
+        'code': '''
+# Create empty IV summary dataframe
+iv_summary = pd.DataFrame(columns=['variable', 'IV'])
+'''
+    },
+    {
+        'number': 3,
+        'name': 'Calculate WoE and IV for All Variables',
+        'description': 'Loops through all numeric variables, creates 10 bins for each, calculates WoE and IV statistics.',
+        'function': None,
+        'code': '''
+# For each variable:
+# 1. Create 10 bins using qcut
+df['bin'] = pd.qcut(df[variable], q=10, labels=False, duplicates='drop')
+
+# 2. Calculate good/bad counts by bin
+stats = df.groupby('bin').agg({
+    'default_flag': ['sum', 'count']
+})
+stats['good'] = stats['total'] - stats['bad']
+
+# 3. Calculate percentages
+stats['pct_good'] = stats['good'] / tot_good
+stats['pct_bad'] = stats['bad'] / tot_bad
+
+# 4. Calculate WoE
+stats['woe'] = np.log(stats['pct_good'] / stats['pct_bad'])
+
+# 5. Calculate IV component
+stats['iv_component'] = (stats['pct_good'] - stats['pct_bad']) * stats['woe']
+
+# 6. Sum IV components to get total IV
+IV = stats['iv_component'].sum()
+'''
+    }
+]
+
+
+def load_data_from_file():
+    """Load data from CSV file."""
+    data_file = current_dir / "data" / "woe_ready.csv"
+    if data_file.exists():
+        return pd.read_csv(data_file)
+    else:
+        st.error(f"Data file not found: {data_file}")
+        return None
+
+
+def display_step_info(step):
+    """Display step information and code."""
+    st.markdown(f'<div class="stage-header">Step {step["number"]}: {step["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(f"**Description:** {step['description']}")
+    
+    st.markdown("**Python Code:**")
+    st.code(step['code'], language='python')
+
+
+def main():
+    """Main application."""
+    # Scroll to top on page load if scroll parameter is present
+    if st.query_params.get("scroll") == "top":
+        st.markdown("""
+        <script>
+            (function() {
+                window.scrollTo(0, 0);
+                document.documentElement.scrollTop = 0;
+                document.body.scrollTop = 0;
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                }, 50);
+                setTimeout(function() {
+                    window.scrollTo(0, 0);
+                    document.documentElement.scrollTop = 0;
+                    document.body.scrollTop = 0;
+                }, 200);
+            })();
+        </script>
+        """, unsafe_allow_html=True)
+    
+    st.markdown('<h1 class="main-header">IV and WoE Analysis</h1>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    This application calculates Information Value (IV) and Weight of Evidence (WoE) 
+    for numeric variables. IV measures the predictive power of variables, while WoE 
+    provides transformation values for each bin.
+    
+    **Instructions:**
+    1. Default data (woe_ready.csv) is loaded automatically
+    2. Execute each step sequentially
+    3. View the IV summary and WoE statistics for all variables
+    4. Review variable rankings by IV value
+    """)
+    
+    st.markdown("---")
+    
+    # Auto-load default data if not already loaded
+    if st.session_state.input_data is None:
+        data = load_data_from_file()
+        if data is not None:
+            st.session_state.input_data = data
+            st.session_state.current_step = 0
+            st.session_state.step_results = {}
+    
+    # Sidebar for navigation
+    with st.sidebar:
+        st.header("Data Information")
+        if st.session_state.input_data is not None:
+            st.success(f"Data loaded: {len(st.session_state.input_data):,} rows, {len(st.session_state.input_data.columns)} columns")
+            st.caption("Default: woe_ready.csv")
+        
+        st.markdown("---")
+        
+        if st.session_state.input_data is not None:
+            st.header("Step Navigation")
+            
+            for i, step in enumerate(STEPS):
+                status = "✅" if i < st.session_state.current_step else "⏳"
+                if st.button(f"{status} Step {step['number']}: {step['name']}", 
+                            key=f"nav_{i}",
+                            disabled=(i > st.session_state.current_step)):
+                    # Ensure index is valid before setting
+                    if 0 <= i < len(STEPS):
+                        st.session_state.current_step = i
+                        st.rerun()
+            
+            st.markdown("---")
+            if st.button("Reset All Steps"):
+                st.session_state.current_step = 0
+                st.session_state.step_results = {}
+                st.rerun()
+            
+            # Download button for output CSV (only show if Step 3 is completed)
+            if 2 in st.session_state.step_results:
+                st.markdown("---")
+                st.header("Download Results")
+                output_file = current_dir / "data" / "iv_woe_output.csv"
+                if output_file.exists():
+                    with open(output_file, 'rb') as f:
+                        st.download_button(
+                            label="Download iv_woe_output.csv",
+                            data=f.read(),
+                            file_name="iv_woe_output.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+        else:
+            st.info("Please load data first")
+    
+    # Main content area
+    if st.session_state.input_data is None:
+        st.error("Error: Could not load default data file. Please check that woe_ready.csv exists in the data folder.")
+        return
+    
+    # Display current step
+    current_step_idx = st.session_state.current_step
+    
+    # Ensure STEPS is not empty
+    if len(STEPS) == 0:
+        st.error("No steps defined. Please check the STEPS configuration.")
+        return
+    
+    # Ensure current_step_idx is within valid range
+    if current_step_idx >= len(STEPS):
+        current_step_idx = len(STEPS) - 1
+        st.session_state.current_step = current_step_idx
+    elif current_step_idx < 0:
+        current_step_idx = 0
+        st.session_state.current_step = current_step_idx
+    
+    step = STEPS[current_step_idx]
+    
+    # Step information
+    display_step_info(step)
+    
+    st.markdown("---")
+    
+    # Execute step button
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        execute_disabled = current_step_idx in st.session_state.step_results
+        is_final_step = current_step_idx == len(STEPS) - 1
+        all_steps_completed = len(st.session_state.step_results) == len(STEPS)
+        
+        # Change button text for final step when all steps are completed
+        if is_final_step and all_steps_completed:
+            button_text = "Proceed to next Analysis"
+            if st.button(button_text, type="primary", disabled=True):
+                pass  # Disabled for now as requested
+        else:
+            button_text = "Execute Step"
+            if st.button(button_text, type="primary", disabled=execute_disabled):
+                with st.spinner(f"Executing Step {step['number']}..."):
+                    try:
+                        input_df = st.session_state.input_data.copy()
+                        
+                        # Step 1: Get numeric variables
+                        if step['number'] == 1:
+                            numeric_vars = step1_get_numeric_variables(input_df)
+                            result = {
+                                'numeric_vars': numeric_vars,
+                                'count': len(numeric_vars)
+                            }
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully! Found {len(numeric_vars)} numeric variables.")
+                            st.rerun()
+                        
+                        # Step 2: Create IV summary structure
+                        elif step['number'] == 2:
+                            result = step2_create_iv_summary_structure()
+                            st.session_state.step_results[current_step_idx] = result
+                            st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                            st.success(f"Step {step['number']} executed successfully!")
+                            st.rerun()
+                        
+                        # Step 3: Calculate WoE and IV for all variables
+                        elif step['number'] == 3:
+                            if 0 not in st.session_state.step_results:
+                                st.error("Please execute Step 1 first.")
+                            else:
+                                step1_result = st.session_state.step_results[0]
+                                numeric_vars = step1_result['numeric_vars']
+                                
+                                iv_summary, woe_all = step4_calculate_woe_iv_all_variables(
+                                    input_df,
+                                    numeric_vars,
+                                    target_col='default_flag',
+                                    n_bins=10
+                                )
+                                
+                                # Sort IV summary by IV value (descending)
+                                iv_summary = iv_summary.sort_values('IV', ascending=False).reset_index(drop=True)
+                                
+                                # Ensure data directory exists
+                                data_dir = current_dir / "data"
+                                data_dir.mkdir(parents=True, exist_ok=True)
+                                
+                                # Save IV summary
+                                iv_file = data_dir / "iv_woe_output.csv"
+                                iv_summary.to_csv(iv_file, index=False)
+                                
+                                # Save WoE statistics
+                                woe_file = data_dir / "woe_statistics.csv"
+                                woe_all.to_csv(woe_file, index=False)
+                                
+                                result = {
+                                    'iv_summary': iv_summary,
+                                    'woe_all': woe_all
+                                }
+                                
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"Step {step['number']} executed successfully! Calculated IV for {len(iv_summary)} variables. Output saved to iv_woe_output.csv and woe_statistics.csv")
+                                st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"Error executing step: {str(e)}")
+                        st.exception(e)
+    
+    # Display results if step has been executed
+    if current_step_idx in st.session_state.step_results:
+        result = st.session_state.step_results[current_step_idx]
+        
+        st.markdown("**Results:**")
+        
+        # Step 1 special display
+        if step['number'] == 1:
+            if isinstance(result, dict):
+                st.subheader("Numeric Variables Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Numeric Variables", f"{result['count']}")
+                with col2:
+                    st.metric("Excluding Target", "default_flag")
+                
+                st.subheader("Numeric Variables List")
+                numeric_vars = result['numeric_vars']
+                # Display first 50 variables
+                display_vars = numeric_vars[:50]
+                st.write(f"**Total:** {len(numeric_vars)} variables")
+                st.write(", ".join(display_vars))
+                if len(numeric_vars) > 50:
+                    st.write(f"... and {len(numeric_vars) - 50} more variables")
+        
+        # Step 2 special display
+        elif step['number'] == 2:
+            if isinstance(result, pd.DataFrame):
+                st.subheader("IV Summary Structure Created")
+                st.write("**Columns:**", ", ".join(result.columns.tolist()))
+                st.write("**Rows:**", len(result))
+                st.dataframe(result, use_container_width=True)
+        
+        # Step 3 special display
+        elif step['number'] == 3:
+            if isinstance(result, dict):
+                iv_summary = result.get('iv_summary', pd.DataFrame())
+                woe_all = result.get('woe_all', pd.DataFrame())
+                
+                st.subheader("IV Summary - All Variables (Sorted by IV)")
+                if not iv_summary.empty:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Variables Analyzed", f"{len(iv_summary)}")
+                    with col2:
+                        st.metric("Highest IV", f"{iv_summary['IV'].max():.4f}")
+                    with col3:
+                        st.metric("Average IV", f"{iv_summary['IV'].mean():.4f}")
+                    
+                    # IV interpretation guide
+                    st.info("""
+                    **IV Interpretation Guide:**
+                    - < 0.02: Not useful for prediction
+                    - 0.02 - 0.1: Weak predictive power
+                    - 0.1 - 0.3: Medium predictive power
+                    - 0.3 - 0.5: Strong predictive power
+                    - > 0.5: Suspiciously high (check for overfitting)
+                    """)
+                    
+                    # Display top 20 variables
+                    st.subheader("Top 20 Variables by IV")
+                    st.dataframe(iv_summary.head(20), use_container_width=True)
+                    
+                    # Display full IV summary
+                    st.subheader("Full IV Summary")
+                    st.dataframe(iv_summary, use_container_width=True, height=400)
+                    
+                    # WoE statistics preview
+                    if not woe_all.empty:
+                        st.subheader("WoE Statistics Preview (First 50 Rows)")
+                        st.dataframe(woe_all.head(50), use_container_width=True)
+                        
+                        # Variable selector for detailed WoE view
+                        st.subheader("Detailed WoE View by Variable")
+                        var_options = sorted(iv_summary['variable'].tolist())
+                        selected_var = st.selectbox("Select a variable to view detailed WoE statistics:", 
+                                                    var_options, key="woe_var_selector")
+                        
+                        if selected_var:
+                            var_woe = woe_all[woe_all['variable'] == selected_var].copy()
+                            if not var_woe.empty:
+                                var_woe = var_woe.sort_values('bin').reset_index(drop=True)
+                                st.dataframe(var_woe, use_container_width=True)
+                else:
+                    st.warning("No IV summary calculated. Please check the data and try again.")
+        
+        # Standard display for other steps
+        else:
+            if isinstance(result, pd.DataFrame):
+                st.dataframe(result, use_container_width=True)
+            elif isinstance(result, dict):
+                for key, value in result.items():
+                    st.write(f"**{key}:**")
+                    if isinstance(value, pd.DataFrame):
+                        st.dataframe(value, use_container_width=True)
+                    else:
+                        st.write(value)
+            else:
+                st.write(result)
+    else:
+        st.info("Click 'Execute Step' to run this step and view the results.")
+    
+    # Progress indicator
+    st.markdown("---")
+    st.markdown("### Analysis Progress")
+    completed = len(st.session_state.step_results)
+    total = len(STEPS)
+    progress = completed / total
+    st.progress(progress)
+    st.caption(f"Completed: {completed} / {total} steps ({progress*100:.1f}%)")
+    
+    # Detailed Summary Tables - show when all steps are completed
+    if completed == total:
+        st.markdown("---")
+        st.markdown("### Detailed Analysis Summary")
+        
+        # Overall Summary
+        if 2 in st.session_state.step_results:
+            step3_result = st.session_state.step_results[2]
+            step1_result = st.session_state.step_results[0]
+            
+            if isinstance(step3_result, dict):
+                iv_summary = step3_result.get('iv_summary', pd.DataFrame())
+                
+                st.markdown("#### Overall Summary")
+                overall_summary = pd.DataFrame({
+                    'Metric': ['Variables Analyzed', 'Output Files Created'],
+                    'Count': [len(iv_summary), 2],
+                    'Details': [
+                        f"{len(iv_summary)} numeric variables from input data",
+                        "iv_woe_output.csv (IV summary), woe_statistics.csv (detailed WoE)"
+                    ]
+                })
+                st.dataframe(overall_summary, use_container_width=True, hide_index=True)
+        
+        # Step-by-step summary
+        st.markdown("---")
+        st.markdown("#### Step-by-Step Summary")
+        
+        # Step 1 summary
+        if 0 in st.session_state.step_results:
+            step1_result = st.session_state.step_results[0]
+            st.markdown("##### Step 1: Get Numeric Variables")
+            summary_table = pd.DataFrame({
+                'Metric': ['Numeric Variables Found'],
+                'Count': [step1_result['count']],
+                'Details': [f"{step1_result['count']} variables (excluding default_flag)"]
+            })
+            st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 2 summary
+        if 1 in st.session_state.step_results:
+            st.markdown("##### Step 2: Create IV Summary Structure")
+            summary_table = pd.DataFrame({
+                'Metric': ['Structure Created'],
+                'Count': [1],
+                'Details': ["Empty IV summary table with 'variable' and 'IV' columns"]
+            })
+            st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 3 summary
+        if 2 in st.session_state.step_results:
+            step3_result = st.session_state.step_results[2]
+            if isinstance(step3_result, dict):
+                iv_summary = step3_result.get('iv_summary', pd.DataFrame())
+                woe_all = step3_result.get('woe_all', pd.DataFrame())
+                
+                st.markdown("##### Step 3: Calculate WoE and IV for All Variables")
+                summary_table = pd.DataFrame({
+                    'Metric': ['Variables Analyzed', 'IV Values Calculated', 'WoE Bins Created', 'Top IV Value'],
+                    'Count': [
+                        len(iv_summary),
+                        len(iv_summary),
+                        len(woe_all),
+                        iv_summary['IV'].max() if not iv_summary.empty else 0
+                    ],
+                    'Details': [
+                        f"All {len(iv_summary)} numeric variables processed",
+                        f"IV calculated for {len(iv_summary)} variables",
+                        f"Total bins across all variables: {len(woe_all)}",
+                        f"Highest IV: {iv_summary['IV'].max():.4f}" if not iv_summary.empty else "N/A"
+                    ]
+                })
+                st.dataframe(summary_table, use_container_width=True, hide_index=True)
+
+if __name__ == "__main__":
+    main()
+
