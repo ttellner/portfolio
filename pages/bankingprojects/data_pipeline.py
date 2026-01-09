@@ -503,6 +503,7 @@ def main():
                         st.session_state.stage_results[current_stage_idx] = result_df
                         
                         # Save output to var_metadata_input.csv if final stage
+                        # This file persists and is overwritten each run to allow starting from var_metadata_analysis.py
                         if is_final_stage:
                             data_dir = current_dir / "data"
                             data_dir.mkdir(parents=True, exist_ok=True)

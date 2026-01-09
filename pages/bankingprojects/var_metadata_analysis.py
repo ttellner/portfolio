@@ -552,7 +552,8 @@ def main():
                                 output_file = data_dir / "var_metadata_output.csv"
                                 result.to_csv(output_file, index=False)
                                 
-                                # Save as feat_eng_data.csv for next step (permanent file, overwrites each run)
+                                # Save as feat_eng_data.csv for next step
+                                # This file persists and is overwritten each run to allow starting from feat_eng_analysis.py
                                 feat_eng_file = data_dir / "feat_eng_data.csv"
                                 result.to_csv(feat_eng_file, index=False)
                                 

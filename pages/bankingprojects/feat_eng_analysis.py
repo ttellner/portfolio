@@ -496,7 +496,8 @@ def main():
                                 data_dir = current_dir / "data"
                                 data_dir.mkdir(parents=True, exist_ok=True)
                                 
-                                # Save as woe_ready.csv for next step (permanent file, overwrites each run)
+                                # Save as woe_ready.csv for next step
+                                # This file persists and is overwritten each run to allow starting from the next analysis step
                                 woe_file = data_dir / "woe_ready.csv"
                                 result.to_csv(woe_file, index=False)
                                 
