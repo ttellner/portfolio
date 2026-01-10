@@ -218,13 +218,23 @@ iv_table['good'] = iv_table['total'] - iv_table['bad']
 
 
 def load_data_from_file():
-    """Load data from CSV file."""
+    """Load data from CSV file with fallback options."""
+    # Primary input: feat_eng_data.csv (from var_metadata_analysis.py Step 8)
     data_file = current_dir / "data" / "feat_eng_data.csv"
     if data_file.exists():
         return pd.read_csv(data_file)
-    else:
-        st.error(f"Data file not found: {data_file}")
-        return None
+    
+    # Fallback: var_metadata_input.csv (from data_pipeline.py final stage)
+    fallback_file = current_dir / "data" / "var_metadata_input.csv"
+    if fallback_file.exists():
+        st.info("Using fallback data file: var_metadata_input.csv (from Data Pipeline)")
+        return pd.read_csv(fallback_file)
+    
+    # If neither exists, show error
+    st.error(f"Data file not found. Please ensure one of the following exists:\n"
+             f"- {data_file.name} (from Variable Metadata Analysis Step 8)\n"
+             f"- {fallback_file.name} (from Data Pipeline final stage)")
+    return None
 
 
 def display_step_info(step):
@@ -288,7 +298,12 @@ def main():
         st.header("Data Information")
         if st.session_state.input_data is not None:
             st.success(f"Data loaded: {len(st.session_state.input_data):,} rows, {len(st.session_state.input_data.columns)} columns")
-            st.caption("Default: feat_eng_data.csv")
+            # Check which file was actually loaded
+            feat_eng_file = current_dir / "data" / "feat_eng_data.csv"
+            if feat_eng_file.exists():
+                st.caption("Default: feat_eng_data.csv")
+            else:
+                st.caption("Using: var_metadata_input.csv (fallback)")
         
         st.markdown("---")
         
@@ -330,7 +345,10 @@ def main():
     
     # Main content area
     if st.session_state.input_data is None:
-        st.error("Error: Could not load default data file. Please check that feat_eng_data.csv exists in the data folder.")
+        st.error("Error: Could not load default data file. Please ensure one of the following exists in the data folder:\n"
+                 "- feat_eng_data.csv (from Variable Metadata Analysis Step 8)\n"
+                 "- var_metadata_input.csv (from Data Pipeline final stage)")
+        st.info("💡 **Tip:** Run the previous analysis steps to generate the required input file, or ensure the default files exist.")
         return
     
     # Display current step

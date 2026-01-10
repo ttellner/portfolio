@@ -133,13 +133,23 @@ IV = stats['iv_component'].sum()
 
 
 def load_data_from_file():
-    """Load data from CSV file."""
+    """Load data from CSV file with fallback options."""
+    # Primary input: woe_ready.csv (from feat_eng_analysis.py Step 6)
     data_file = current_dir / "data" / "woe_ready.csv"
     if data_file.exists():
         return pd.read_csv(data_file)
-    else:
-        st.error(f"Data file not found: {data_file}")
-        return None
+    
+    # Fallback: feat_eng_output.csv (from feat_eng_analysis.py Step 5)
+    fallback_file = current_dir / "data" / "feat_eng_output.csv"
+    if fallback_file.exists():
+        st.info("Using fallback data file: feat_eng_output.csv (from Feature Engineering Analysis Step 5)")
+        return pd.read_csv(fallback_file)
+    
+    # If neither exists, show error
+    st.error(f"Data file not found. Please ensure one of the following exists:\n"
+             f"- {data_file.name} (from Feature Engineering Analysis Step 6)\n"
+             f"- {fallback_file.name} (from Feature Engineering Analysis Step 5)")
+    return None
 
 
 def display_step_info(step):
@@ -204,7 +214,12 @@ def main():
         st.header("Data Information")
         if st.session_state.input_data is not None:
             st.success(f"Data loaded: {len(st.session_state.input_data):,} rows, {len(st.session_state.input_data.columns)} columns")
-            st.caption("Default: woe_ready.csv")
+            # Check which file was actually loaded
+            woe_file = current_dir / "data" / "woe_ready.csv"
+            if woe_file.exists():
+                st.caption("Default: woe_ready.csv")
+            else:
+                st.caption("Using: feat_eng_output.csv (fallback)")
         
         st.markdown("---")
         
@@ -246,7 +261,10 @@ def main():
     
     # Main content area
     if st.session_state.input_data is None:
-        st.error("Error: Could not load default data file. Please check that woe_ready.csv exists in the data folder.")
+        st.error("Error: Could not load default data file. Please ensure one of the following exists in the data folder:\n"
+                 "- woe_ready.csv (from Feature Engineering Analysis Step 6)\n"
+                 "- feat_eng_output.csv (from Feature Engineering Analysis Step 5)")
+        st.info("💡 **Tip:** Run the previous analysis steps to generate the required input file, or ensure the default files exist.")
         return
     
     # Display current step
