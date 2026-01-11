@@ -554,26 +554,35 @@ def select_final_variables(iv_filtered: pd.DataFrame,
     """
     Final selection - keep only variables that exist in the dataset.
     
+    This function implements the SAS logic:
+    - Variables from iv_filtered where keep_flag = 1 (variables in keep_list OR with IV between 0.015-5.0)
+    - UNION with all variables from keep_list (ensures keep_list variables are included even if not in iv_summary)
+    - Filter to only keep variables that exist in the dataset
+    
+    Note: Variables in keep_list are ALWAYS kept (regardless of IV values), but only if they exist in the dataset.
+    If a keep_list variable doesn't exist in the dataset, it cannot be kept.
+    
     Parameters:
     -----------
     iv_filtered : pd.DataFrame
         Filtered IV summary with 'keep_flag' column
     keep_list : list
-        List of variables to always keep
+        List of variables to always keep (regardless of IV values)
     available_variables : list
         List of variables that exist in the dataset
     
     Returns:
     --------
-    list : Final list of selected variables
+    list : Final list of selected variables (only those that exist in the dataset)
     """
-    # Get variables with keep_flag = 1
+    # Get variables with keep_flag = 1 (variables in keep_list OR with IV between 0.015-5.0)
     vars_from_iv = iv_filtered[iv_filtered['keep_flag'] == 1]['variable'].tolist()
     
-    # Combine with keep list
+    # Combine with keep_list (UNION operation - ensures keep_list variables are included even if not in iv_filtered)
     combined_vars = list(set(vars_from_iv + keep_list))
     
     # Keep only variables that exist in the dataset
+    # Note: Some keep_list variables may not exist in the dataset, so they cannot be kept
     selected_vars = [var for var in combined_vars if var in available_variables]
     
     return selected_vars
