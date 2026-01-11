@@ -1,6 +1,6 @@
 """
 IV and WoE Analysis
-Calculates Information Value (IV) and Weight of Evidence (WoE) and analyzes variable predictive powe.
+Calculates Information Value (IV) and Weight of Evidence (WoE), analyzes variable predictive power.
 """
 
 import streamlit as st
