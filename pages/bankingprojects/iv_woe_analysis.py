@@ -675,26 +675,42 @@ def main():
                 vars_to_keep = result.get('vars_to_keep', [])
                 keep_list = result.get('keep_list', [])
                 
-                col1, col2, col3 = st.columns(3)
+                # Calculate breakdown
+                vars_from_keep_list = [var for var in vars_to_keep if var in keep_list]
+                vars_from_iv_only = [var for var in vars_to_keep if var not in keep_list]
+                
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Variables in Keep List", f"{len(keep_list)}")
                 with col2:
-                    st.metric("Variables to Keep", f"{len(vars_to_keep)}")
+                    st.metric("Variables to Keep (Total)", f"{len(vars_to_keep)}")
                 with col3:
-                    if not iv_filtered.empty:
-                        st.metric("Variables with IV >= 0.015", f"{len(iv_filtered[iv_filtered['IV'] >= 0.015])}")
+                    st.metric("From Keep List", f"{len(vars_from_keep_list)}")
+                with col4:
+                    st.metric("From IV Only (Not in Keep List)", f"{len(vars_from_iv_only)}")
                 
                 if not iv_filtered.empty:
                     st.subheader("IV Filtered Summary (with keep_flag)")
                     st.dataframe(iv_filtered, use_container_width=True, height=400)
                     
-                    st.subheader("Variables Selected to Keep")
+                    st.subheader("Breakdown of Variables Selected to Keep")
                     st.write(f"**Total:** {len(vars_to_keep)} variables")
-                    # Display first 50 variables
-                    display_vars = vars_to_keep[:50]
-                    st.write(", ".join(display_vars))
-                    if len(vars_to_keep) > 50:
-                        st.write(f"... and {len(vars_to_keep) - 50} more variables")
+                    st.write(f"- **From Keep List:** {len(vars_from_keep_list)} variables (kept regardless of IV)")
+                    st.write(f"- **From IV Only (Not in Keep List):** {len(vars_from_iv_only)} variables (kept because IV >= 0.015 and <= 5.0)")
+                    
+                    if vars_from_keep_list:
+                        st.write(f"\n**Variables from Keep List ({len(vars_from_keep_list)}):**")
+                        display_keep = vars_from_keep_list[:50]
+                        st.write(", ".join(display_keep))
+                        if len(vars_from_keep_list) > 50:
+                            st.write(f"... and {len(vars_from_keep_list) - 50} more")
+                    
+                    if vars_from_iv_only:
+                        st.write(f"\n**Variables from IV Only - NOT in Keep List ({len(vars_from_iv_only)}):**")
+                        display_iv = vars_from_iv_only[:50]
+                        st.write(", ".join(display_iv))
+                        if len(vars_from_iv_only) > 50:
+                            st.write(f"... and {len(vars_from_iv_only) - 50} more")
         
         # Step 6 special display
         elif step['number'] == 6:
