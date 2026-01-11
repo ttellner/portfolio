@@ -1,5 +1,6 @@
-/* 1 Get list of numeric variables except default_flag */
-proc contents data=CREDIT.PD_MODEL_DATA_CH10_CLEAN out=var_list(keep=name type) noprint;
+/* STEP 1: Get List of Numeric Variables Except DEFAULT_FLAG */
+proc contents data=CREDIT.PD_MODEL_DATA_CH10_CLEAN 
+    out=var_list(keep=name type) noprint;
 run;
 
 proc sql;
@@ -9,88 +10,287 @@ proc sql;
     where type=1 and upcase(name) ne 'DEFAULT_FLAG';
 quit;
 
-/* 2  Create empty IV summary table with correct structure */
+/* STEP 2: Create Empty Base Tables in WORK */
 data iv_summary;
     length variable $50. IV 8.;
     stop;
 run;
 
-/* 3 Create macro variables for looping */
+data woe_all;
+    length variable $50. bin 8. good 8. bad 8. pct_good 8. pct_bad 8. woe 8. iv_component 8.;
+    stop;
+run;
+
+/* STEP 3: Create Macro Variables for Loop */
 data _null_;
     set numeric_vars end=last;
     call symputx(cats('var',_n_), name);
     if last then call symputx('total_vars', _n_);
 run;
 
-%put Total Variables = &total_vars;
-
-/* 4 Loop through all variables */
-%macro calc_woe_iv_all;
+/* STEP 4: Auto WoE & IV Calculation for All Variables Except bureau_score */
+%macro calc_auto_woe_iv;
     %do i=1 %to &total_vars;
         %let var = &&var&i;
 
-        /* Create 10 bins for variable */
+        %if &var ne bureau_score %then %do;
+
+            proc rank data=CREDIT.PD_MODEL_DATA_CH10_CLEAN groups=10 out=ranked;
+                var &var;
+                ranks bin;
+            run;
+
+            proc sql;
+                create table stats as
+                select bin,
+                       sum(default_flag=1) as bad,
+                       sum(default_flag=0) as good
+                from ranked
+                group by bin;
+            quit;
+
+            proc sql noprint;
+                select sum(good), sum(bad) into :tot_good, :tot_bad from stats;
+            quit;
+
+            data stats_woe;
+                length variable $50.;
+                set stats;
+                pct_good = good / &tot_good;
+                pct_bad  = bad / &tot_bad;
+
+                if pct_good=0 then pct_good=0.0001;
+                if pct_bad=0 then pct_bad=0.0001;
+
+                woe = log(pct_good / pct_bad);
+                iv_component = (pct_good - pct_bad) * woe;
+                variable = "&var";
+            run;
+
+            proc sql noprint;
+                select sum(iv_component) into :iv from stats_woe;
+            quit;
+
+            data temp;
+                length variable $50. IV 8.;
+                variable="&var";
+                IV=&iv;
+            run;
+
+            proc append base=iv_summary data=temp force; run;
+            proc append base=woe_all data=stats_woe force; run;
+
+        %end;
+    %end;
+%mend;
+
+%calc_auto_woe_iv;
+
+/* STEP 5: Manual Binning for bureau_score */
+data manual_binned;
+    set CREDIT.PD_MODEL_DATA_CH10_CLEAN;
+    length bin 8.;
+    if bureau_score < 400 then bin=1;
+    else if bureau_score < 500 then bin=2;
+    else if bureau_score < 600 then bin=3;
+    else if bureau_score < 700 then bin=4;
+    else bin=5;
+run;
+
+proc sql;
+    create table manual_stats as
+    select bin,
+           sum(default_flag=1) as bad,
+           sum(default_flag=0) as good
+    from manual_binned
+    group by bin;
+quit;
+
+proc sql noprint;
+    select sum(good), sum(bad) into :tot_good, :tot_bad from manual_stats;
+quit;
+
+data manual_woe;
+    length variable $50.;
+    set manual_stats;
+    pct_good = good / &tot_good;
+    pct_bad  = bad / &tot_bad;
+
+    if pct_good=0 then pct_good=0.0001;
+    if pct_bad=0 then pct_bad=0.0001;
+
+    woe = log(pct_good / pct_bad);
+    iv_component = (pct_good - pct_bad) * woe;
+    variable = "bureau_score";
+run;
+
+/* Append Manual WoE */
+proc append base=woe_all data=manual_woe force; run;
+
+proc sql noprint;
+    select sum(iv_component) into :iv from manual_woe;
+quit;
+
+data temp;
+    length variable $50. IV 8.;
+    variable="bureau_score";
+    IV=&iv;
+run;
+
+proc append base=iv_summary data=temp force; run;
+
+/* STEP 6: Apply WoE to Dataset */
+%macro apply_woe_all;
+    %do i=1 %to &total_vars;
+        %let var = &&var&i;
+
         proc rank data=CREDIT.PD_MODEL_DATA_CH10_CLEAN groups=10 out=ranked;
             var &var;
             ranks bin;
         run;
 
-        /* Good/Bad counts */
+        data woe_temp;
+            set woe_all;
+            where variable="&var";
+        run;
+
         proc sql;
-            create table stats as
-            select bin,
-                   sum((default_flag=1)) as bad,  /* BAD customers */
-                   sum((default_flag=0)) as good  /* GOOD customers */
-            from ranked
-            group by bin;
+            create table merged as
+            select a.*, b.woe as &var._woe
+            from ranked a
+            left join woe_temp b
+            on a.bin=b.bin;
         quit;
 
-        /* Total goods/bads */
-        proc sql noprint;
-            select sum(good), sum(bad) into :tot_good, :tot_bad from stats;
-        quit;
-
-        /* WoE & IV components */
-        data stats_woe;
-            set stats;
-            pct_good = good / &tot_good;
-            pct_bad  = bad / &tot_bad;
-
-            if pct_good=0 then pct_good=0.0001;
-            if pct_bad=0 then pct_bad=0.0001;
-
-            woe = log(pct_good / pct_bad);
-            iv_component = (pct_good - pct_bad) * woe;
-            length variable $50.;
-            variable = "&var";
+        data merged;
+            set merged;
+            if not missing(&var._woe) then do;
+                drop &var bin;
+                rename &var._woe=&var;
+            end;
         run;
 
-        /* Get IV value */
-        proc sql noprint;
-            select sum(iv_component) into :iv from stats_woe;
-        quit;
-
-        /* Append IV to summary with correct structure */
-        data temp;
-            length variable $50. IV 8.;
-            variable="&var";
-            IV=&iv;
+        data CREDIT.PD_MODEL_DATA_CH10_CLEAN;
+            set merged;
         run;
-
-        proc append base=iv_summary data=temp force; run;
-
-        /* Append WoE table for all variables */
-        proc append base=woe_all data=stats_woe force; run;
 
     %end;
 %mend;
 
-%calc_woe_iv_all;
+%apply_woe_all;
 
-/* 5 Final IV Summary */
-proc print data=iv_summary;
+/* STEP 7: Create Permanent IV Summary Table */
+data CREDIT.PD_IV_SUMMARY;
+    set iv_summary;
 run;
-proc rank data=CREDIT.PD_MODEL_DATA_CH10_CLEAN groups=10 out=ranked;
-    var bureau_score;
-    ranks bureau_decile;
+
+/* Display Final IV Summary */
+proc print data=CREDIT.PD_IV_SUMMARY; run;
+Step 1: Create Expanded Forced Keep List
+------------------------------------------------------------*/
+data keep_list;
+    length variable $50.;
+    input variable $;
+    datalines;
+bureau_score
+bureau_score_bucket
+bureau_score_bucket_50
+bureau_enquiries_1m
+bureau_enquiries_3m
+bureau_enquiries_6m
+bureau_enquiries_12m
+salary_credit_3m
+salary_credit_6m
+salary_credit_12m
+emi_to_income_ratio
+requested_amount
+minimum_balance
+dpd_max
+dpd_count_30_plus
+dpd_count_60_plus
+dpd_sum_total
+last_payment_gap
+num_loans_active
+num_loans_closed
+num_credit_cards_active
+utilization_score
+balance_utilization_score
+credit_card_utilization_pct
+amount_income_term_score
+behavior_bureau_interaction
+age
+employment_type
+education_level
+marital_status
+gender
+city_category
+customer_vintage_months
+avg_monthly_spend
+loan_to_income_ratio
+installment_to_balance_ratio
+cash_txn_ratio
+pos_txn_volume
+risk_score
+credit_limit_usage_ratio
+income_variability_score
+overdue_amount_ratio
+account_open_date
+monthly_income
+monthly_interest_rate
+emi_income_ratio
+emi_normalized
+recovery_success_flag
+request_term_ratio_flag
+;
+run;
+
+/*------------------------------------------------------------
+Step 2: Merge IV Summary with Keep List and Apply Filtering Rules
+------------------------------------------------------------*/
+proc sql;
+    create table iv_filtered as
+    select a.variable, a.iv,
+           case 
+               when b.variable is not null then 1         /* Always keep forced variables */
+               when a.iv >= 0.015 and a.iv <= 5 then 1    /* Relaxed IV cutoff */
+               else 0
+           end as keep_flag
+    from CREDIT.PD_IV_SUMMARY a
+    left join keep_list b
+    on a.variable = b.variable;
+quit;
+
+/*------------------------------------------------------------
+Step 3: Extract All Variables Present in the Dataset
+------------------------------------------------------------*/
+proc contents data=CREDIT.PD_MODEL_DATA_CH10_CLEAN out=var_list(keep=name) noprint;
+run;
+
+/*------------------------------------------------------------
+Step 4: Final Selection – Keep Only Existing Variables
+------------------------------------------------------------*/
+proc sql;
+    create table selected_vars as
+    select variable 
+    from (
+        select variable from iv_filtered where keep_flag = 1
+        union
+        select variable from keep_list
+    ) as combined
+    where variable in (select name from var_list);  /* Keep only variables that exist */
+quit;
+
+/*------------------------------------------------------------
+Step 5: Create Macro Variable for Final Variable List
+------------------------------------------------------------*/
+proc sql noprint;
+    select variable into :selected_list separated by ' '
+    from selected_vars;
+quit;
+
+/*------------------------------------------------------------
+Step 6: Create Final Filtered Dataset
+------------------------------------------------------------*/
+data CREDIT.PD_MODEL_DATA_CH10_FILTERED;
+    set CREDIT.PD_MODEL_DATA_CH10_CLEAN(keep=default_flag &selected_list);
 run;

@@ -17,8 +17,8 @@ if str(current_dir) not in sys.path:
 from iv_woe_functions import (
     step1_get_numeric_variables,
     step2_create_iv_summary_structure,
-    step4_calculate_woe_iv_for_variable,
-    step4_calculate_woe_iv_all_variables
+    calculate_woe_iv_with_manual_bureau_score,
+    apply_woe_transformations
 )
 
 # Page configuration
@@ -81,7 +81,6 @@ STEPS = [
         'number': 1,
         'name': 'Get Numeric Variables',
         'description': 'Identifies all numeric variables in the dataset, excluding the target variable (default_flag).',
-        'function': step1_get_numeric_variables,
         'code': '''
 # Get numeric variables excluding default_flag
 numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
@@ -91,21 +90,23 @@ numeric_vars = [col for col in numeric_cols
     },
     {
         'number': 2,
-        'name': 'Create IV Summary Structure',
-        'description': 'Creates an empty IV summary table with the correct structure (variable, IV columns).',
-        'function': step2_create_iv_summary_structure,
+        'name': 'Create Empty Base Tables',
+        'description': 'Creates empty IV summary and WoE statistics tables with the correct structure.',
         'code': '''
 # Create empty IV summary dataframe
 iv_summary = pd.DataFrame(columns=['variable', 'IV'])
+
+# Create empty WoE statistics dataframe
+woe_all = pd.DataFrame(columns=['variable', 'bin', 'good', 'bad', 
+                                'pct_good', 'pct_bad', 'woe', 'iv_component'])
 '''
     },
     {
         'number': 3,
         'name': 'Calculate WoE and IV for All Variables',
-        'description': 'Loops through all numeric variables, creates 10 bins for each, calculates WoE and IV statistics.',
-        'function': None,
+        'description': 'Loops through all numeric variables, creates bins (10 bins for automatic, manual bins for bureau_score), calculates WoE and IV statistics.',
         'code': '''
-# For each variable:
+# For each variable (except bureau_score):
 # 1. Create 10 bins using qcut
 df['bin'] = pd.qcut(df[variable], q=10, labels=False, duplicates='drop')
 
@@ -115,18 +116,25 @@ stats = df.groupby('bin').agg({
 })
 stats['good'] = stats['total'] - stats['bad']
 
-# 3. Calculate percentages
+# 3. Calculate percentages and WoE
 stats['pct_good'] = stats['good'] / tot_good
 stats['pct_bad'] = stats['bad'] / tot_bad
-
-# 4. Calculate WoE
 stats['woe'] = np.log(stats['pct_good'] / stats['pct_bad'])
-
-# 5. Calculate IV component
 stats['iv_component'] = (stats['pct_good'] - stats['pct_bad']) * stats['woe']
 
-# 6. Sum IV components to get total IV
-IV = stats['iv_component'].sum()
+# For bureau_score: Use manual binning with cutoffs <400, 400-500, 500-600, 600-700, >=700
+'''
+    },
+    {
+        'number': 4,
+        'name': 'Apply WoE Transformations',
+        'description': 'Applies WoE transformations to the dataset, replacing original variables with their WoE values.',
+        'code': '''
+# For each variable:
+# 1. Create bins (same as calculation step)
+# 2. Merge with WoE statistics
+# 3. Replace original variable with WoE values
+df[variable] = merged_woe_values
 '''
     }
 ]
@@ -154,7 +162,7 @@ def load_data_from_file():
 
 def display_step_info(step):
     """Display step information and code."""
-    st.markdown(f'<div class="stage-header">Step {step["number"]}: {step["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="stage-header">{step["name"]}</div>', unsafe_allow_html=True)
     st.markdown(f"**Description:** {step['description']}")
     
     st.markdown("**Python Code:**")
@@ -228,7 +236,7 @@ def main():
             
             for i, step in enumerate(STEPS):
                 status = "✅" if i < st.session_state.current_step else "⏳"
-                if st.button(f"{status} Step {step['number']}: {step['name']}", 
+                if st.button(f"{status} {step['name']}", 
                             key=f"nav_{i}",
                             disabled=(i > st.session_state.current_step)):
                     # Ensure index is valid before setting
@@ -305,7 +313,7 @@ def main():
         else:
             button_text = "Execute Step"
             if st.button(button_text, type="primary", disabled=execute_disabled):
-                with st.spinner(f"Executing Step {step['number']}..."):
+                with st.spinner(f"Executing {step['name']}..."):
                     try:
                         input_df = st.session_state.input_data.copy()
                         
@@ -318,15 +326,21 @@ def main():
                             }
                             st.session_state.step_results[current_step_idx] = result
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Found {len(numeric_vars)} numeric variables.")
+                            st.success(f"{step['name']} executed successfully! Found {len(numeric_vars)} numeric variables.")
                             st.rerun()
                         
-                        # Step 2: Create IV summary structure
+                        # Step 2: Create empty base tables
                         elif step['number'] == 2:
-                            result = step2_create_iv_summary_structure()
+                            iv_summary = step2_create_iv_summary_structure()
+                            woe_all = pd.DataFrame(columns=['variable', 'bin', 'good', 'bad', 
+                                                           'pct_good', 'pct_bad', 'woe', 'iv_component'])
+                            result = {
+                                'iv_summary': iv_summary,
+                                'woe_all': woe_all
+                            }
                             st.session_state.step_results[current_step_idx] = result
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully!")
+                            st.success(f"{step['name']} executed successfully!")
                             st.rerun()
                         
                         # Step 3: Calculate WoE and IV for all variables
@@ -337,11 +351,13 @@ def main():
                                 step1_result = st.session_state.step_results[0]
                                 numeric_vars = step1_result['numeric_vars']
                                 
-                                iv_summary, woe_all = step4_calculate_woe_iv_all_variables(
+                                iv_summary, woe_all = calculate_woe_iv_with_manual_bureau_score(
                                     input_df,
                                     numeric_vars,
                                     target_col='default_flag',
-                                    n_bins=10
+                                    n_bins=10,
+                                    manual_var='bureau_score',
+                                    manual_bin_edges=[400, 500, 600, 700]
                                 )
                                 
                                 # Sort IV summary by IV value (descending)
@@ -366,7 +382,46 @@ def main():
                                 
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully! Calculated IV for {len(iv_summary)} variables. Output saved to iv_woe_output.csv and woe_statistics.csv")
+                                st.success(f"{step['name']} executed successfully! Calculated IV for {len(iv_summary)} variables. Output saved to iv_woe_output.csv and woe_statistics.csv")
+                                st.rerun()
+                        
+                        # Step 4: Apply WoE transformations
+                        elif step['number'] == 4:
+                            if 2 not in st.session_state.step_results:
+                                st.error("Please execute Step 3 first.")
+                            else:
+                                step1_result = st.session_state.step_results[0]
+                                step3_result = st.session_state.step_results[2]
+                                numeric_vars = step1_result['numeric_vars']
+                                woe_all = step3_result['woe_all']
+                                
+                                df_woe_transformed = apply_woe_transformations(
+                                    input_df,
+                                    woe_all,
+                                    numeric_vars,
+                                    target_col='default_flag',
+                                    n_bins=10,
+                                    manual_var='bureau_score',
+                                    manual_bin_edges=[400, 500, 600, 700]
+                                )
+                                
+                                # Ensure data directory exists
+                                data_dir = current_dir / "data"
+                                data_dir.mkdir(parents=True, exist_ok=True)
+                                
+                                # Save WoE transformed dataset
+                                woe_transformed_file = data_dir / "woe_transformed_data.csv"
+                                df_woe_transformed.to_csv(woe_transformed_file, index=False)
+                                
+                                result = {
+                                    'woe_transformed_data': df_woe_transformed,
+                                    'rows': len(df_woe_transformed),
+                                    'columns': len(df_woe_transformed.columns)
+                                }
+                                
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"{step['name']} executed successfully! WoE transformed data saved to woe_transformed_data.csv")
                                 st.rerun()
                     
                     except Exception as e:
@@ -400,11 +455,11 @@ def main():
         
         # Step 2 special display
         elif step['number'] == 2:
-            if isinstance(result, pd.DataFrame):
-                st.subheader("IV Summary Structure Created")
-                st.write("**Columns:**", ", ".join(result.columns.tolist()))
-                st.write("**Rows:**", len(result))
-                st.dataframe(result, use_container_width=True)
+            if isinstance(result, dict):
+                st.subheader("Empty Base Tables Created")
+                st.write("**IV Summary Structure:**", ", ".join(result['iv_summary'].columns.tolist()))
+                st.write("**WoE Statistics Structure:**", ", ".join(result['woe_all'].columns.tolist()))
+                st.dataframe(result['iv_summary'], use_container_width=True)
         
         # Step 3 special display
         elif step['number'] == 3:
@@ -459,6 +514,27 @@ def main():
                 else:
                     st.warning("No IV summary calculated. Please check the data and try again.")
         
+        # Step 4 special display
+        elif step['number'] == 4:
+            if isinstance(result, dict):
+                df_woe = result.get('woe_transformed_data', pd.DataFrame())
+                
+                st.subheader("WoE Transformed Data Summary")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Rows", f"{result.get('rows', 0):,}")
+                with col2:
+                    st.metric("Columns", f"{result.get('columns', 0)}")
+                
+                st.subheader("WoE Transformed Data Preview (First 20 Rows)")
+                if not df_woe.empty:
+                    st.dataframe(df_woe.head(20), use_container_width=True)
+                    
+                    st.subheader("Data Summary Statistics")
+                    st.dataframe(df_woe.describe(), use_container_width=True)
+                else:
+                    st.warning("No transformed data available.")
+        
         # Standard display for other steps
         else:
             if isinstance(result, pd.DataFrame):
@@ -500,10 +576,10 @@ def main():
                 st.markdown("#### Overall Summary")
                 overall_summary = pd.DataFrame({
                     'Metric': ['Variables Analyzed', 'Output Files Created'],
-                    'Count': [len(iv_summary), 2],
+                    'Count': [len(iv_summary), 3],
                     'Details': [
                         f"{len(iv_summary)} numeric variables from input data",
-                        "iv_woe_output.csv (IV summary), woe_statistics.csv (detailed WoE)"
+                        "iv_woe_output.csv (IV summary), woe_statistics.csv (detailed WoE), woe_transformed_data.csv (WoE transformed data)"
                     ]
                 })
                 st.dataframe(overall_summary, use_container_width=True, hide_index=True)
@@ -525,11 +601,11 @@ def main():
         
         # Step 2 summary
         if 1 in st.session_state.step_results:
-            st.markdown("##### Step 2: Create IV Summary Structure")
+            st.markdown("##### Step 2: Create Empty Base Tables")
             summary_table = pd.DataFrame({
-                'Metric': ['Structure Created'],
-                'Count': [1],
-                'Details': ["Empty IV summary table with 'variable' and 'IV' columns"]
+                'Metric': ['Structures Created'],
+                'Count': [2],
+                'Details': ["Empty IV summary and WoE statistics tables with correct structure"]
             })
             st.dataframe(summary_table, use_container_width=True, hide_index=True)
         
@@ -550,14 +626,32 @@ def main():
                         iv_summary['IV'].max() if not iv_summary.empty else 0
                     ],
                     'Details': [
-                        f"All {len(iv_summary)} numeric variables processed",
+                        f"All {len(iv_summary)} numeric variables processed (manual binning for bureau_score)",
                         f"IV calculated for {len(iv_summary)} variables",
                         f"Total bins across all variables: {len(woe_all)}",
                         f"Highest IV: {iv_summary['IV'].max():.4f}" if not iv_summary.empty else "N/A"
                     ]
                 })
                 st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 4 summary
+        if 3 in st.session_state.step_results:
+            step4_result = st.session_state.step_results[3]
+            st.markdown("##### Step 4: Apply WoE Transformations")
+            summary_table = pd.DataFrame({
+                'Metric': ['Variables Transformed', 'Output Rows', 'Output Columns'],
+                'Count': [
+                    step1_result['count'] if 0 in st.session_state.step_results else 0,
+                    step4_result.get('rows', 0),
+                    step4_result.get('columns', 0)
+                ],
+                'Details': [
+                    f"WoE transformations applied to all numeric variables",
+                    f"Transformed dataset contains {step4_result.get('rows', 0):,} rows",
+                    f"Transformed dataset contains {step4_result.get('columns', 0)} columns"
+                ]
+            })
+            st.dataframe(summary_table, use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     main()
-

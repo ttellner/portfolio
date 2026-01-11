@@ -199,3 +199,243 @@ def step4_calculate_woe_iv_all_variables(df: pd.DataFrame,
     
     return iv_summary, woe_all
 
+
+def calculate_manual_binning_woe_iv(df: pd.DataFrame,
+                                     var_name: str,
+                                     bin_edges: List[float],
+                                     target_col: str = 'default_flag') -> Tuple[float, pd.DataFrame]:
+    """
+    Calculate WoE and IV for a variable using manual binning.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input dataframe
+    var_name : str
+        Name of the variable to analyze
+    bin_edges : list
+        List of bin edges for manual binning (e.g., [400, 500, 600, 700] creates bins: <400, 400-500, 500-600, 600-700, >=700)
+    target_col : str
+        Name of the target variable (default: 'default_flag')
+    
+    Returns:
+    --------
+    tuple : (IV value, WoE statistics dataframe)
+    """
+    if var_name not in df.columns or target_col not in df.columns:
+        return 0.0, pd.DataFrame()
+    
+    df_work = df[[var_name, target_col]].copy()
+    df_work = df_work.dropna(subset=[var_name])
+    
+    if len(df_work) == 0:
+        return 0.0, pd.DataFrame()
+    
+    # Create manual bins
+    df_work['bin'] = pd.cut(df_work[var_name], bins=[-np.inf] + bin_edges + [np.inf], labels=False, right=False)
+    df_work['bin'] = df_work['bin'] + 1  # Start from 1 instead of 0
+    
+    # Calculate good/bad counts by bin
+    stats = df_work.groupby('bin').agg({
+        target_col: ['sum', 'count']
+    }).reset_index()
+    
+    stats.columns = ['bin', 'bad', 'total']
+    stats['good'] = stats['total'] - stats['bad']
+    
+    if len(stats) == 0:
+        return 0.0, pd.DataFrame()
+    
+    # Calculate total goods/bads
+    tot_good = stats['good'].sum()
+    tot_bad = stats['bad'].sum()
+    
+    if tot_good == 0 or tot_bad == 0:
+        return 0.0, stats
+    
+    # Calculate WoE & IV components
+    stats['pct_good'] = stats['good'] / tot_good
+    stats['pct_bad'] = stats['bad'] / tot_bad
+    
+    # Avoid division by zero
+    stats['pct_good'] = stats['pct_good'].replace(0, 0.0001)
+    stats['pct_bad'] = stats['pct_bad'].replace(0, 0.0001)
+    
+    # Calculate WoE
+    stats['woe'] = np.log(stats['pct_good'] / stats['pct_bad'])
+    
+    # Calculate IV component
+    stats['iv_component'] = (stats['pct_good'] - stats['pct_bad']) * stats['woe']
+    
+    # Add variable name
+    stats['variable'] = var_name
+    
+    # Calculate total IV
+    iv_value = stats['iv_component'].sum()
+    
+    return iv_value, stats
+
+
+def calculate_woe_iv_with_manual_bureau_score(df: pd.DataFrame,
+                                              numeric_vars: List[str],
+                                              target_col: str = 'default_flag',
+                                              n_bins: int = 10,
+                                              manual_var: str = 'bureau_score',
+                                              manual_bin_edges: List[float] = [400, 500, 600, 700]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Calculate WoE and IV for all numeric variables, with manual binning for a specific variable.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input dataframe
+    numeric_vars : list
+        List of numeric variable names to analyze
+    target_col : str
+        Name of the target variable (default: 'default_flag')
+    n_bins : int
+        Number of bins to create for automatic binning (default: 10)
+    manual_var : str
+        Variable name to use manual binning for (default: 'bureau_score')
+    manual_bin_edges : list
+        Bin edges for manual binning (default: [400, 500, 600, 700])
+    
+    Returns:
+    --------
+    tuple : (IV summary dataframe, WoE statistics dataframe for all variables)
+    """
+    iv_summary_list = []
+    woe_all_list = []
+    
+    for var in numeric_vars:
+        if var not in df.columns:
+            continue
+        
+        # Use manual binning for specified variable, automatic for others
+        if var == manual_var:
+            iv_value, woe_stats = calculate_manual_binning_woe_iv(
+                df, var, manual_bin_edges, target_col
+            )
+        else:
+            iv_value, woe_stats = step4_calculate_woe_iv_for_variable(
+                df, var, target_col, n_bins
+            )
+        
+        # Append to IV summary
+        iv_summary_list.append({
+            'variable': var,
+            'IV': iv_value
+        })
+        
+        # Append to WoE table if valid
+        if not woe_stats.empty:
+            woe_all_list.append(woe_stats)
+    
+    # Create IV summary dataframe
+    iv_summary = pd.DataFrame(iv_summary_list)
+    
+    # Combine all WoE statistics
+    if woe_all_list:
+        woe_all = pd.concat(woe_all_list, ignore_index=True)
+    else:
+        woe_all = pd.DataFrame(columns=['bin', 'bad', 'good', 'total', 
+                                       'pct_good', 'pct_bad', 'woe', 
+                                       'iv_component', 'variable'])
+    
+    return iv_summary, woe_all
+
+
+def apply_woe_transformations(df: pd.DataFrame,
+                              woe_all: pd.DataFrame,
+                              numeric_vars: List[str],
+                              target_col: str = 'default_flag',
+                              n_bins: int = 10,
+                              manual_var: str = 'bureau_score',
+                              manual_bin_edges: List[float] = [400, 500, 600, 700]) -> pd.DataFrame:
+    """
+    Apply WoE transformations to the dataset, replacing original variables with WoE values.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input dataframe
+    woe_all : pd.DataFrame
+        DataFrame containing WoE statistics for all variables
+    numeric_vars : list
+        List of numeric variable names to transform
+    target_col : str
+        Name of the target variable (default: 'default_flag')
+    n_bins : int
+        Number of bins for automatic binning (default: 10)
+    manual_var : str
+        Variable name that uses manual binning (default: 'bureau_score')
+    manual_bin_edges : list
+        Bin edges for manual binning (default: [400, 500, 600, 700])
+    
+    Returns:
+    --------
+    pd.DataFrame : Dataframe with WoE transformed variables
+    """
+    df_transformed = df.copy()
+    
+    for var in numeric_vars:
+        if var not in df_transformed.columns:
+            continue
+        
+        # Get WoE statistics for this variable
+        var_woe = woe_all[woe_all['variable'] == var].copy()
+        
+        if var_woe.empty:
+            continue
+        
+        # Get non-null indices for this variable
+        non_null_mask = df_transformed[var].notna()
+        non_null_indices = df_transformed.index[non_null_mask]
+        
+        if len(non_null_indices) == 0:
+            continue
+        
+        # Extract values for binning
+        var_values = df_transformed.loc[non_null_indices, var]
+        
+        # Use manual binning for specified variable, automatic for others
+        if var == manual_var:
+            bins = pd.cut(var_values, bins=[-np.inf] + manual_bin_edges + [np.inf], 
+                         labels=False, right=False)
+            bins = bins + 1  # Start from 1 instead of 0
+            bins = bins.astype(int)
+        else:
+            try:
+                bins = pd.qcut(
+                    var_values,
+                    q=n_bins,
+                    labels=False,
+                    duplicates='drop'
+                )
+            except ValueError:
+                bins = pd.qcut(
+                    var_values.rank(method='first'),
+                    q=n_bins,
+                    labels=False,
+                    duplicates='drop'
+                )
+            bins = bins.fillna(-1).astype(int)
+            # Only process valid bins (>= 0)
+            valid_bin_mask = bins >= 0
+            bins = bins[valid_bin_mask]
+            non_null_indices = non_null_indices[valid_bin_mask]
+        
+        # Create a dataframe for merging
+        bin_df = pd.DataFrame({'bin': bins.values}, index=non_null_indices)
+        
+        # Merge with WoE values
+        merged = bin_df.merge(
+            var_woe[['bin', 'woe']],
+            on='bin',
+            how='left'
+        )
+        
+        # Replace original variable with WoE values (only where we have valid WoE)
+        df_transformed.loc[merged.index, var] = merged['woe'].values
+    
+    return df_transformed
