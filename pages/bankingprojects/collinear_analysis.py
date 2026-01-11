@@ -22,10 +22,9 @@ from collinear_functions import (
     calculate_vif,
     identify_vars_to_drop_vif,
     apply_vif_filter,
-    create_final_keep_list,
-    apply_final_keep_list_filter,
     run_full_collinearity_analysis
 )
+from iv_woe_functions import create_expanded_keep_list
 
 # Page configuration
 st.set_page_config(
@@ -73,13 +72,15 @@ if current_page == "collinear_analysis.py" and last_page != "collinear_analysis.
 
 st.session_state.last_page_collinear = current_page
 
-# Initialize session state
+    # Initialize session state
 if 'input_data' not in st.session_state:
     st.session_state.input_data = None
 if 'current_step' not in st.session_state:
     st.session_state.current_step = 0
 if 'step_results' not in st.session_state:
     st.session_state.step_results = {}
+if 'starting_columns' not in st.session_state:
+    st.session_state.starting_columns = []
 
 # Step definitions with descriptions and code snippets
 STEPS = [
@@ -127,13 +128,15 @@ df_vif_filtered = apply_vif_filter(df_filtered, vars_to_drop_vif)
     {
         'number': 3,
         'name': 'Apply Final Keep List Filter',
-        'description': 'Applies final keep list filter, keeping only variables from the keep list that exist in the dataset, plus the target variable.',
+        'description': 'Filters to only keep columns that are in the keep list from IV/WoE Analysis. Only columns from model_data_filtered.csv that are in the IV/WoE keep list are retained.',
         'code': '''
-# Create final keep list
-keep_list = create_final_keep_list()
+# Get keep list from IV/WoE Analysis
+keep_list = create_expanded_keep_list()
 
-# Apply final keep list filter
-df_final = apply_final_keep_list_filter(df_vif_filtered, keep_list)
+# Filter to only columns in keep list (and target)
+columns_to_keep = [col for col in df_vif_filtered.columns 
+                   if col in keep_list or col == 'default_flag']
+df_final = df_vif_filtered[columns_to_keep].copy()
 '''
     }
 ]
@@ -170,6 +173,94 @@ def load_iv_summary():
         except Exception:
             pass
     return None
+
+
+def create_column_summary(
+    starting_columns: List[str],
+    keep_list: List[str],
+    vars_dropped_corr: List[str],
+    vars_dropped_vif: List[str],
+    vars_dropped_final: List[str],
+    final_columns: List[str],
+    iv_summary: Optional[pd.DataFrame] = None
+) -> pd.DataFrame:
+    """
+    Create a summary of column categorization and filtering.
+    
+    Parameters:
+    -----------
+    starting_columns : list
+        List of columns in the starting dataset
+    keep_list : list
+        List of business critical columns (from IV/WoE keep list)
+    vars_dropped_corr : list
+        Variables dropped due to correlation filtering
+    vars_dropped_vif : list
+        Variables dropped due to VIF filtering
+    vars_dropped_final : list
+        Variables dropped in final step (not in keep list)
+    final_columns : list
+        Final columns in the dataset
+    iv_summary : pd.DataFrame, optional
+        IV summary DataFrame with 'variable' and 'IV' columns
+    
+    Returns:
+    --------
+    pd.DataFrame : Summary DataFrame with columns: variable, category, reason, status
+    """
+    summary_data = []
+    iv_dict = {}
+    if iv_summary is not None and not iv_summary.empty:
+        iv_dict = dict(zip(iv_summary['variable'], iv_summary['IV']))
+    
+    # Categorize all starting columns
+    for col in starting_columns:
+        if col == 'default_flag':
+            category = 'Target'
+            reason = 'Target variable'
+            status = 'Kept'
+        elif col in keep_list:
+            category = 'Business Critical'
+            reason = 'In keep list from IV/WoE Analysis'
+            if col in vars_dropped_corr:
+                status = f'Dropped (Correlation)'
+            elif col in vars_dropped_vif:
+                status = f'Dropped (VIF)'
+            elif col in vars_dropped_final:
+                status = f'Dropped (Not in keep list)'
+            elif col in final_columns:
+                status = 'Kept'
+            else:
+                status = 'Dropped (Other)'
+        else:
+            # Not in keep list - categorize by IV if available
+            iv_value = iv_dict.get(col, None)
+            if iv_value is not None:
+                category = 'IV Filtered'
+                reason = f'IV = {iv_value:.4f}'
+            else:
+                category = 'Other'
+                reason = 'Not in keep list'
+            
+            if col in vars_dropped_corr:
+                status = 'Dropped (Correlation)'
+            elif col in vars_dropped_vif:
+                status = 'Dropped (VIF)'
+            elif col in vars_dropped_final:
+                status = 'Dropped (Not in keep list)'
+            elif col in final_columns:
+                status = 'Kept'
+            else:
+                status = 'Dropped (Other)'
+        
+        summary_data.append({
+            'variable': col,
+            'category': category,
+            'reason': reason,
+            'status': status
+        })
+    
+    return pd.DataFrame(summary_data)
 
 
 def display_step_info(step):
@@ -228,6 +319,7 @@ def main():
             st.session_state.input_data = data
             st.session_state.current_step = 0
             st.session_state.step_results = {}
+            st.session_state.starting_columns = list(data.columns)
     
     # Sidebar for navigation
     with st.sidebar:
@@ -362,10 +454,42 @@ def main():
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
                                 st.rerun()
                             
-                            # Step 3: Final Keep List Filter
+                            # Step 3: Apply Final Keep List Filter
                             elif step['number'] == 3:
-                                keep_list = create_final_keep_list()
-                                df_final = apply_final_keep_list_filter(input_df, keep_list)
+                                # Get keep list from IV/WoE Analysis
+                                keep_list = create_expanded_keep_list()
+                                
+                                # Filter to only columns in keep list (and target)
+                                columns_to_keep = [col for col in input_df.columns 
+                                                   if col in keep_list or col == 'default_flag']
+                                
+                                # Identify columns NOT in keep list
+                                columns_not_in_keep_list = [col for col in input_df.columns 
+                                                            if col not in keep_list and col != 'default_flag']
+                                
+                                df_final = input_df[columns_to_keep].copy()
+                                
+                                # Get variables dropped in previous steps
+                                vars_dropped_corr = []
+                                vars_dropped_vif = []
+                                if 0 in st.session_state.step_results:
+                                    vars_dropped_corr = st.session_state.step_results[0].get('vars_dropped', [])
+                                if 1 in st.session_state.step_results:
+                                    vars_dropped_vif = st.session_state.step_results[1].get('vars_dropped', [])
+                                
+                                # Variables dropped in final step (not in keep list)
+                                vars_dropped_final = columns_not_in_keep_list
+                                
+                                # Create column summary
+                                column_summary = create_column_summary(
+                                    starting_columns=st.session_state.starting_columns,
+                                    keep_list=keep_list,
+                                    vars_dropped_corr=vars_dropped_corr,
+                                    vars_dropped_vif=vars_dropped_vif,
+                                    vars_dropped_final=vars_dropped_final,
+                                    final_columns=list(df_final.columns),
+                                    iv_summary=iv_summary
+                                )
                                 
                                 # Save to CSV
                                 output_file = current_dir / "data" / "model_ready_data.csv"
@@ -376,7 +500,13 @@ def main():
                                     'final_df': df_final,
                                     'rows': len(df_final),
                                     'columns': len(df_final.columns),
-                                    'variables': list(df_final.columns)
+                                    'variables': list(df_final.columns),
+                                    'columns_not_in_keep_list': columns_not_in_keep_list,
+                                    'input_columns': list(input_df.columns),
+                                    'column_summary': column_summary,
+                                    'vars_dropped_corr': vars_dropped_corr,
+                                    'vars_dropped_vif': vars_dropped_vif,
+                                    'vars_dropped_final': vars_dropped_final
                                 }
                                 
                                 st.session_state.step_results[current_step_idx] = result
@@ -466,17 +596,100 @@ def main():
                     keep_list = result.get('keep_list', [])
                     final_df = result.get('final_df', pd.DataFrame())
                     variables = result.get('variables', [])
+                    columns_not_in_keep_list = result.get('columns_not_in_keep_list', [])
+                    input_columns = result.get('input_columns', [])
+                    column_summary = result.get('column_summary', pd.DataFrame())
+                    vars_dropped_corr = result.get('vars_dropped_corr', [])
+                    vars_dropped_vif = result.get('vars_dropped_vif', [])
+                    vars_dropped_final = result.get('vars_dropped_final', [])
                     
                     st.subheader("Final Dataset Summary")
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Total Variables in Keep List", f"{len(keep_list)}")
+                        st.metric("Starting Columns", f"{len(st.session_state.starting_columns)}")
                     with col2:
-                        st.metric("Variables in Final Dataset", f"{len(variables)}")
+                        st.metric("Business Critical (Keep List)", f"{len(keep_list)}")
                     with col3:
+                        st.metric("Variables in Final Dataset", f"{len(variables)}")
+                    with col4:
                         st.metric("Rows", f"{result.get('rows', 0):,}")
                     
-                    st.subheader("Final Variables")
+                    # Column Summary Table
+                    if not column_summary.empty:
+                        st.subheader("Column Summary by Category")
+                        
+                        # Summary statistics
+                        summary_stats = column_summary.groupby(['category', 'status']).size().reset_index(name='count')
+                        summary_pivot = summary_stats.pivot_table(
+                            index='category', 
+                            columns='status', 
+                            values='count', 
+                            fill_value=0
+                        )
+                        
+                        st.dataframe(summary_pivot, use_container_width=True)
+                        
+                        st.subheader("Detailed Column Summary")
+                        
+                        # Filter options
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            category_filter = st.multiselect(
+                                "Filter by Category",
+                                options=sorted(column_summary['category'].unique()),
+                                default=sorted(column_summary['category'].unique())
+                            )
+                        with col2:
+                            status_filter = st.multiselect(
+                                "Filter by Status",
+                                options=sorted(column_summary['status'].unique()),
+                                default=sorted(column_summary['status'].unique())
+                            )
+                        
+                        filtered_summary = column_summary[
+                            (column_summary['category'].isin(category_filter)) &
+                            (column_summary['status'].isin(status_filter))
+                        ].copy()
+                        
+                        st.dataframe(
+                            filtered_summary.sort_values(['category', 'status', 'variable']),
+                            use_container_width=True,
+                            height=400
+                        )
+                        
+                        # Breakdown by category
+                        st.subheader("Breakdown by Category")
+                        
+                        # Business Critical columns
+                        business_critical = filtered_summary[filtered_summary['category'] == 'Business Critical']
+                        if not business_critical.empty:
+                            st.markdown("**Business Critical Columns (From Keep List):**")
+                            kept_bc = business_critical[business_critical['status'] == 'Kept']
+                            dropped_bc = business_critical[business_critical['status'] != 'Kept']
+                            st.write(f"- Kept: {len(kept_bc)} columns")
+                            if len(dropped_bc) > 0:
+                                st.write(f"- Dropped: {len(dropped_bc)} columns (due to correlation/VIF filtering)")
+                                st.dataframe(dropped_bc[['variable', 'status']], use_container_width=True)
+                        
+                        # IV Filtered columns
+                        iv_filtered = filtered_summary[filtered_summary['category'] == 'IV Filtered']
+                        if not iv_filtered.empty:
+                            st.markdown("**IV Filtered Columns (Not in Keep List):**")
+                            kept_iv = iv_filtered[iv_filtered['status'] == 'Kept']
+                            dropped_iv = iv_filtered[iv_filtered['status'] != 'Kept']
+                            st.write(f"- Kept: {len(kept_iv)} columns (good IV but dropped in final step if not in keep list)")
+                            if len(dropped_iv) > 0:
+                                st.write(f"- Dropped: {len(dropped_iv)} columns")
+                    
+                    # Show columns NOT in keep list (if any)
+                    if len(columns_not_in_keep_list) > 0:
+                        st.subheader("Columns Dropped in Final Step (Not in Keep List)")
+                        st.info(f"**{len(columns_not_in_keep_list)} columns** from the input file were NOT in the IV/WoE keep list and were excluded from the final dataset:")
+                        st.dataframe(pd.DataFrame({'variable': columns_not_in_keep_list}), use_container_width=True)
+                    else:
+                        st.success("All columns in the input file were in the keep list from IV/WoE Analysis.")
+                    
+                    st.subheader("Final Variables (From Keep List)")
                     st.dataframe(pd.DataFrame({'variable': variables}), use_container_width=True)
                     
                     st.subheader("Final Dataset Preview (First 20 Rows)")
