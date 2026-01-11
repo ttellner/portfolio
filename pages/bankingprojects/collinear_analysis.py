@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import sys
+from typing import List, Optional
 
 # Add current directory to path for imports
 current_dir = Path(__file__).parent.absolute()
