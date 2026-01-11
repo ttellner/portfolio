@@ -439,3 +439,169 @@ def apply_woe_transformations(df: pd.DataFrame,
         df_transformed.loc[merged.index, var] = merged['woe'].values
     
     return df_transformed
+
+
+def create_expanded_keep_list() -> List[str]:
+    """
+    Create expanded forced keep list of variables that should always be kept.
+    
+    Returns:
+    --------
+    list : List of variable names to always keep
+    """
+    keep_list = [
+        'bureau_score',
+        'bureau_score_bucket',
+        'bureau_score_bucket_50',
+        'bureau_enquiries_1m',
+        'bureau_enquiries_3m',
+        'bureau_enquiries_6m',
+        'bureau_enquiries_12m',
+        'salary_credit_3m',
+        'salary_credit_6m',
+        'salary_credit_12m',
+        'emi_to_income_ratio',
+        'requested_amount',
+        'minimum_balance',
+        'dpd_max',
+        'dpd_count_30_plus',
+        'dpd_count_60_plus',
+        'dpd_sum_total',
+        'last_payment_gap',
+        'num_loans_active',
+        'num_loans_closed',
+        'num_credit_cards_active',
+        'utilization_score',
+        'balance_utilization_score',
+        'credit_card_utilization_pct',
+        'amount_income_term_score',
+        'behavior_bureau_interaction',
+        'age',
+        'employment_type',
+        'education_level',
+        'marital_status',
+        'gender',
+        'city_category',
+        'customer_vintage_months',
+        'avg_monthly_spend',
+        'loan_to_income_ratio',
+        'installment_to_balance_ratio',
+        'cash_txn_ratio',
+        'pos_txn_volume',
+        'risk_score',
+        'credit_limit_usage_ratio',
+        'income_variability_score',
+        'overdue_amount_ratio',
+        'account_open_date',
+        'monthly_income',
+        'monthly_interest_rate',
+        'emi_income_ratio',
+        'emi_normalized',
+        'recovery_success_flag',
+        'request_term_ratio_flag'
+    ]
+    return keep_list
+
+
+def filter_variables_by_iv(iv_summary: pd.DataFrame,
+                           keep_list: List[str],
+                           iv_min: float = 0.015,
+                           iv_max: float = 5.0) -> pd.DataFrame:
+    """
+    Merge IV summary with keep list and apply filtering rules.
+    
+    Parameters:
+    -----------
+    iv_summary : pd.DataFrame
+        IV summary dataframe with 'variable' and 'IV' columns
+    keep_list : list
+        List of variables to always keep
+    iv_min : float
+        Minimum IV value for filtering (default: 0.015)
+    iv_max : float
+        Maximum IV value for filtering (default: 5.0)
+    
+    Returns:
+    --------
+    pd.DataFrame : Filtered IV summary with 'keep_flag' column
+    """
+    # Create keep list dataframe
+    keep_df = pd.DataFrame({'variable': keep_list})
+    
+    # Merge IV summary with keep list
+    iv_filtered = iv_summary.merge(
+        keep_df,
+        on='variable',
+        how='left',
+        indicator=True
+    )
+    
+    # Apply filtering rules
+    iv_filtered['keep_flag'] = (
+        (iv_filtered['_merge'] == 'both') |  # Always keep forced variables
+        ((iv_filtered['IV'] >= iv_min) & (iv_filtered['IV'] <= iv_max))  # IV cutoff
+    ).astype(int)
+    
+    # Drop merge indicator
+    iv_filtered = iv_filtered.drop(columns=['_merge'])
+    
+    return iv_filtered
+
+
+def select_final_variables(iv_filtered: pd.DataFrame,
+                           keep_list: List[str],
+                           available_variables: List[str]) -> List[str]:
+    """
+    Final selection - keep only variables that exist in the dataset.
+    
+    Parameters:
+    -----------
+    iv_filtered : pd.DataFrame
+        Filtered IV summary with 'keep_flag' column
+    keep_list : list
+        List of variables to always keep
+    available_variables : list
+        List of variables that exist in the dataset
+    
+    Returns:
+    --------
+    list : Final list of selected variables
+    """
+    # Get variables with keep_flag = 1
+    vars_from_iv = iv_filtered[iv_filtered['keep_flag'] == 1]['variable'].tolist()
+    
+    # Combine with keep list
+    combined_vars = list(set(vars_from_iv + keep_list))
+    
+    # Keep only variables that exist in the dataset
+    selected_vars = [var for var in combined_vars if var in available_variables]
+    
+    return selected_vars
+
+
+def create_filtered_dataset(df: pd.DataFrame,
+                           selected_vars: List[str],
+                           target_col: str = 'default_flag') -> pd.DataFrame:
+    """
+    Create final filtered dataset with only selected variables.
+    
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input dataframe
+    selected_vars : list
+        List of variables to keep
+    target_col : str
+        Target variable name (default: 'default_flag')
+    
+    Returns:
+    --------
+    pd.DataFrame : Filtered dataframe with only selected variables and target
+    """
+    # Always include target column
+    cols_to_keep = [target_col] + [var for var in selected_vars if var in df.columns]
+    
+    # Filter dataframe
+    df_filtered = df[cols_to_keep].copy()
+    
+    return df_filtered

@@ -18,7 +18,11 @@ from iv_woe_functions import (
     step1_get_numeric_variables,
     step2_create_iv_summary_structure,
     calculate_woe_iv_with_manual_bureau_score,
-    apply_woe_transformations
+    apply_woe_transformations,
+    create_expanded_keep_list,
+    filter_variables_by_iv,
+    select_final_variables,
+    create_filtered_dataset
 )
 
 # Page configuration
@@ -136,6 +140,33 @@ stats['iv_component'] = (stats['pct_good'] - stats['pct_bad']) * stats['woe']
 # 3. Replace original variable with WoE values
 df[variable] = merged_woe_values
 '''
+    },
+    {
+        'number': 5,
+        'name': 'Create Expanded Keep List and Filter Variables',
+        'description': 'Creates expanded forced keep list, merges IV summary with keep list, and applies filtering rules (IV >= 0.015 and <= 5, or variables in keep list).',
+        'code': '''
+# Create keep list (forced variables to always keep)
+keep_list = create_expanded_keep_list()
+
+# Merge IV summary with keep list and apply filtering rules
+iv_filtered = filter_variables_by_iv(iv_summary, keep_list, iv_min=0.015, iv_max=5.0)
+'''
+    },
+    {
+        'number': 6,
+        'name': 'Create Final Filtered Dataset',
+        'description': 'Selects final variables (only those that exist in dataset) and creates filtered dataset with selected variables and target.',
+        'code': '''
+# Get available variables from dataset
+available_vars = df.columns.tolist()
+
+# Final selection - keep only existing variables
+selected_vars = select_final_variables(iv_filtered, keep_list, available_vars)
+
+# Create filtered dataset
+df_filtered = create_filtered_dataset(df, selected_vars, target_col='default_flag')
+'''
     }
 ]
 
@@ -250,7 +281,7 @@ def main():
                 st.session_state.step_results = {}
                 st.rerun()
             
-            # Download button for output CSV (only show if Step 3 is completed)
+            # Download buttons for output CSVs
             if 2 in st.session_state.step_results:
                 st.markdown("---")
                 st.header("Download Results")
@@ -261,6 +292,19 @@ def main():
                             label="Download iv_woe_output.csv",
                             data=f.read(),
                             file_name="iv_woe_output.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+            
+            # Download filtered dataset (only show if Step 6 is completed)
+            if 5 in st.session_state.step_results:
+                filtered_file = current_dir / "data" / "model_data_filtered.csv"
+                if filtered_file.exists():
+                    with open(filtered_file, 'rb') as f:
+                        st.download_button(
+                            label="Download model_data_filtered.csv",
+                            data=f.read(),
+                            file_name="model_data_filtered.csv",
                             mime="text/csv",
                             use_container_width=True
                         )
@@ -413,15 +457,103 @@ def main():
                                 woe_transformed_file = data_dir / "woe_transformed_data.csv"
                                 df_woe_transformed.to_csv(woe_transformed_file, index=False)
                                 
+                                # Save IV summary (equivalent to CREDIT.PD_IV_SUMMARY in SAS Step 7)
+                                # This matches the SAS flow where IV summary is saved after applying WoE transformations
+                                iv_summary = step3_result['iv_summary']
+                                iv_file = data_dir / "iv_woe_output.csv"
+                                iv_summary.to_csv(iv_file, index=False)
+                                
                                 result = {
                                     'woe_transformed_data': df_woe_transformed,
                                     'rows': len(df_woe_transformed),
-                                    'columns': len(df_woe_transformed.columns)
+                                    'columns': len(df_woe_transformed.columns),
+                                    'iv_summary': iv_summary
                                 }
                                 
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"{step['name']} executed successfully! WoE transformed data saved to woe_transformed_data.csv")
+                                st.success(f"{step['name']} executed successfully! WoE transformed data saved to woe_transformed_data.csv. IV summary saved to iv_woe_output.csv (equivalent to CREDIT.PD_IV_SUMMARY)")
+                                st.rerun()
+                        
+                        # Step 5: Create Expanded Keep List and Filter Variables
+                        elif step['number'] == 5:
+                            if 2 not in st.session_state.step_results:
+                                st.error("Please execute Step 3 first.")
+                            else:
+                                step3_result = st.session_state.step_results[2]
+                                iv_summary = step3_result['iv_summary']
+                                
+                                # Create keep list
+                                keep_list = create_expanded_keep_list()
+                                
+                                # Filter variables by IV
+                                iv_filtered = filter_variables_by_iv(
+                                    iv_summary,
+                                    keep_list,
+                                    iv_min=0.015,
+                                    iv_max=5.0
+                                )
+                                
+                                result = {
+                                    'keep_list': keep_list,
+                                    'iv_filtered': iv_filtered,
+                                    'vars_to_keep': iv_filtered[iv_filtered['keep_flag'] == 1]['variable'].tolist()
+                                }
+                                
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"{step['name']} executed successfully! Filtered {len(result['vars_to_keep'])} variables based on IV criteria and keep list.")
+                                st.rerun()
+                        
+                        # Step 6: Create Final Filtered Dataset
+                        elif step['number'] == 6:
+                            if 3 not in st.session_state.step_results:
+                                st.error("Please execute Step 4 first (Apply WoE Transformations).")
+                            elif 4 not in st.session_state.step_results:
+                                st.error("Please execute Step 5 first (Create Expanded Keep List and Filter Variables).")
+                            else:
+                                step4_result = st.session_state.step_results[3]
+                                step5_result = st.session_state.step_results[4]
+                                df_woe_transformed = step4_result['woe_transformed_data']
+                                keep_list = step5_result['keep_list']
+                                iv_filtered = step5_result['iv_filtered']
+                                
+                                # Get available variables from dataset
+                                available_vars = df_woe_transformed.columns.tolist()
+                                
+                                # Final selection - keep only existing variables
+                                selected_vars = select_final_variables(
+                                    iv_filtered,
+                                    keep_list,
+                                    available_vars
+                                )
+                                
+                                # Create filtered dataset
+                                df_filtered = create_filtered_dataset(
+                                    df_woe_transformed,
+                                    selected_vars,
+                                    target_col='default_flag'
+                                )
+                                
+                                # Ensure data directory exists
+                                data_dir = current_dir / "data"
+                                data_dir.mkdir(parents=True, exist_ok=True)
+                                
+                                # Save filtered dataset (equivalent to CREDIT.PD_MODEL_DATA_CH10_FILTERED)
+                                filtered_file = data_dir / "model_data_filtered.csv"
+                                df_filtered.to_csv(filtered_file, index=False)
+                                
+                                result = {
+                                    'filtered_data': df_filtered,
+                                    'selected_vars': selected_vars,
+                                    'rows': len(df_filtered),
+                                    'columns': len(df_filtered.columns),
+                                    'vars_removed': len(df_woe_transformed.columns) - len(df_filtered.columns)
+                                }
+                                
+                                st.session_state.step_results[current_step_idx] = result
+                                st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                st.success(f"{step['name']} executed successfully! Filtered dataset saved to model_data_filtered.csv (equivalent to CREDIT.PD_MODEL_DATA_CH10_FILTERED). Reduced from {len(df_woe_transformed.columns)} to {len(df_filtered.columns)} columns ({len(selected_vars)} selected variables + default_flag).")
                                 st.rerun()
                     
                     except Exception as e:
@@ -535,6 +667,62 @@ def main():
                 else:
                     st.warning("No transformed data available.")
         
+        # Step 5 special display
+        elif step['number'] == 5:
+            if isinstance(result, dict):
+                st.subheader("Filtered Variables Summary")
+                iv_filtered = result.get('iv_filtered', pd.DataFrame())
+                vars_to_keep = result.get('vars_to_keep', [])
+                keep_list = result.get('keep_list', [])
+                
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Variables in Keep List", f"{len(keep_list)}")
+                with col2:
+                    st.metric("Variables to Keep", f"{len(vars_to_keep)}")
+                with col3:
+                    if not iv_filtered.empty:
+                        st.metric("Variables with IV >= 0.015", f"{len(iv_filtered[iv_filtered['IV'] >= 0.015])}")
+                
+                if not iv_filtered.empty:
+                    st.subheader("IV Filtered Summary (with keep_flag)")
+                    st.dataframe(iv_filtered, use_container_width=True, height=400)
+                    
+                    st.subheader("Variables Selected to Keep")
+                    st.write(f"**Total:** {len(vars_to_keep)} variables")
+                    # Display first 50 variables
+                    display_vars = vars_to_keep[:50]
+                    st.write(", ".join(display_vars))
+                    if len(vars_to_keep) > 50:
+                        st.write(f"... and {len(vars_to_keep) - 50} more variables")
+        
+        # Step 6 special display
+        elif step['number'] == 6:
+            if isinstance(result, dict):
+                df_filtered = result.get('filtered_data', pd.DataFrame())
+                selected_vars = result.get('selected_vars', [])
+                
+                st.subheader("Final Filtered Dataset Summary")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Rows", f"{result.get('rows', 0):,}")
+                with col2:
+                    st.metric("Columns (After Filtering)", f"{result.get('columns', 0)}")
+                with col3:
+                    st.metric("Variables Removed", f"{result.get('vars_removed', 0)}")
+                
+                st.subheader("Selected Variables")
+                st.write(f"**Total:** {len(selected_vars)} variables + default_flag = {result.get('columns', 0)} total columns")
+                
+                st.subheader("Filtered Dataset Preview (First 20 Rows)")
+                if not df_filtered.empty:
+                    st.dataframe(df_filtered.head(20), use_container_width=True)
+                    
+                    st.subheader("Filtered Dataset Summary Statistics")
+                    st.dataframe(df_filtered.describe(), use_container_width=True)
+                else:
+                    st.warning("No filtered data available.")
+        
         # Standard display for other steps
         else:
             if isinstance(result, pd.DataFrame):
@@ -573,13 +761,19 @@ def main():
             if isinstance(step3_result, dict):
                 iv_summary = step3_result.get('iv_summary', pd.DataFrame())
                 
+                # Count output files
+                output_files = ["iv_woe_output.csv (IV summary)", "woe_statistics.csv (detailed WoE)", 
+                               "woe_transformed_data.csv (WoE transformed data)"]
+                if 5 in st.session_state.step_results:
+                    output_files.append("model_data_filtered.csv (filtered dataset)")
+                
                 st.markdown("#### Overall Summary")
                 overall_summary = pd.DataFrame({
                     'Metric': ['Variables Analyzed', 'Output Files Created'],
-                    'Count': [len(iv_summary), 3],
+                    'Count': [len(iv_summary), len(output_files)],
                     'Details': [
                         f"{len(iv_summary)} numeric variables from input data",
-                        "iv_woe_output.csv (IV summary), woe_statistics.csv (detailed WoE), woe_transformed_data.csv (WoE transformed data)"
+                        ", ".join(output_files)
                     ]
                 })
                 st.dataframe(overall_summary, use_container_width=True, hide_index=True)
@@ -649,6 +843,46 @@ def main():
                     f"WoE transformations applied to all numeric variables",
                     f"Transformed dataset contains {step4_result.get('rows', 0):,} rows",
                     f"Transformed dataset contains {step4_result.get('columns', 0)} columns"
+                ]
+            })
+            st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 5 summary
+        if 4 in st.session_state.step_results:
+            step5_result = st.session_state.step_results[4]
+            st.markdown("##### Step 5: Create Expanded Keep List and Filter Variables")
+            summary_table = pd.DataFrame({
+                'Metric': ['Keep List Variables', 'Variables Selected to Keep', 'IV Filter Criteria'],
+                'Count': [
+                    len(step5_result.get('keep_list', [])),
+                    len(step5_result.get('vars_to_keep', [])),
+                    1
+                ],
+                'Details': [
+                    f"{len(step5_result.get('keep_list', []))} forced variables in keep list",
+                    f"{len(step5_result.get('vars_to_keep', []))} variables selected (keep list + IV >= 0.015 and <= 5.0)",
+                    "IV >= 0.015 and <= 5.0, or variables in keep list"
+                ]
+            })
+            st.dataframe(summary_table, use_container_width=True, hide_index=True)
+        
+        # Step 6 summary
+        if 5 in st.session_state.step_results:
+            step6_result = st.session_state.step_results[5]
+            st.markdown("##### Step 6: Create Final Filtered Dataset")
+            summary_table = pd.DataFrame({
+                'Metric': ['Selected Variables', 'Final Columns', 'Variables Removed', 'Output File'],
+                'Count': [
+                    len(step6_result.get('selected_vars', [])),
+                    step6_result.get('columns', 0),
+                    step6_result.get('vars_removed', 0),
+                    1
+                ],
+                'Details': [
+                    f"{len(step6_result.get('selected_vars', []))} variables selected (only existing in dataset)",
+                    f"{step6_result.get('columns', 0)} total columns ({len(step6_result.get('selected_vars', []))} variables + default_flag)",
+                    f"{step6_result.get('vars_removed', 0)} variables removed during filtering",
+                    "model_data_filtered.csv (equivalent to CREDIT.PD_MODEL_DATA_CH10_FILTERED)"
                 ]
             })
             st.dataframe(summary_table, use_container_width=True, hide_index=True)
