@@ -1,0 +1,133 @@
+/*------------------------------------------------------------
+ STEP 1: CORRELATION FILTERING (Output to WORK)
+------------------------------------------------------------*/
+proc corr data=CREDIT.PD_MODEL_DATA_CH10_FILTERED 
+          outp=work.corr_matrix_ch13 noprint;
+    var _numeric_;
+run;
+
+data work.high_corr_pairs_ch13;
+    set work.corr_matrix_ch13;
+    array vars _numeric_;
+    if _TYPE_='CORR' and _NAME_ ne '';
+    do i = 1 to dim(vars);
+        if vars[i] >= 0.90 and _NAME_ < vname(vars[i]) then do;
+            var1 = _NAME_;
+            var2 = vname(vars[i]);
+            corr_value = vars[i];
+            output;
+        end;
+    end;
+    keep var1 var2 corr_value;
+run;
+
+proc sql;
+    create table work.vars_to_drop_ch13 as
+    select a.var2 as variable, a.corr_value, b.iv
+    from work.high_corr_pairs_ch13 a
+    left join CREDIT.PD_IV_SUMMARY b
+    on a.var2 = b.variable
+    where a.corr_value > 0.98
+       or (a.corr_value > 0.95 and b.iv < 0.02);
+quit;
+
+proc sql noprint;
+    select distinct variable into :drop_list separated by ' '
+    from work.vars_to_drop_ch13;
+quit;
+
+data work.corr_filtered_ch13;
+    set CREDIT.PD_MODEL_DATA_CH10_FILTERED;
+    drop &drop_list;
+run;
+/* Create list of independent variables */
+proc contents data=work.corr_filtered_ch13 out=varlist(keep=name type) noprint;
+run;
+
+proc sql noprint;
+    select name into :indep_vars separated by ' '
+    from varlist
+    where type=1 and upcase(name) ne 'DEFAULT_FLAG';
+quit;
+
+/* Run PROC REG once to get VIF */
+ods output ParameterEstimates=estimates;
+proc reg data=work.corr_filtered_ch13;
+    model default_flag = &indep_vars / vif;
+quit;
+ods output close;
+
+/* Identify variables with VIF > 10 (excluding key variables) */
+proc sql noprint;
+    create table work.vars_high_vif_ch13 as
+    select Variable
+    from estimates
+    where VarianceInflation > 10
+      and Variable not in 
+      ('bureau_score','salary_credit_3m','emi_to_income_ratio',
+       'dpd_max','dpd_count_30_plus','utilization_score',
+       'balance_utilization_score','age','employment_type',
+       'education_level','marital_status','risk_score');
+quit;
+
+/* Drop high VIF variables */
+proc sql noprint;
+    select Variable into :drop_vif separated by ' '
+    from work.vars_high_vif_ch13;
+quit;
+
+/* Create FINAL dataset in WORK */
+data work.vif_filtered_final_ch13;
+    set work.corr_filtered_ch13;
+    drop &drop_vif;
+run;
+data CREDIT.VIF_FILTERED_FINAL_CH13;   /* <-- NEW NAME */
+    set work.vif_filtered_final_ch13;
+run;
+
+/* Create final variable list */
+proc contents data=CREDIT.VIF_FILTERED_FINAL_CH13 
+              out=CREDIT.FINAL_VARS_CH13(keep=name type) noprint;
+run;
+
+proc sql;
+    create table CREDIT.FINAL_VARS_SELECTED_CH13 as
+    select name
+    from CREDIT.FINAL_VARS_CH13
+    where type=1 and upcase(name) ne 'DEFAULT_FLAG';
+quit;
+
+/* Step 1: Create Keep List ONLY for variables present in the dataset */
+proc sql;
+    create table work.final_keep_list_ch13 as
+    select name as variable
+    from varlist
+    where name in (
+        "account_open_date","account_tenure_months","age","amount_income_term_score",
+        "annual_interest_rate","application_date","avg_combined_score",
+        "balance_utilization_score","behavior_score_gap","bureau_score",
+        "credit_card_utilization_pct","default_flag","dpd_count_30_plus",
+        "dpd_max","dpd_recent_flag","emi_to_income_ratio","employment_type",
+        "loan_size_score","overdue_normalized","pos_transaction_volume",
+        "recovery_success_flag","risk_score","tenure_months"
+    );
+quit;
+
+/* Step 2: Create Macro Variable */
+proc sql noprint;
+    select variable into :final_vars separated by ' '
+    from work.final_keep_list_ch13;
+quit;
+
+/* Step 3: Create Final Dataset */
+data CREDIT.PD_MODEL_DATA_CH13_FINAL_25;
+    set CREDIT.VIF_FILTERED_FINAL_CH13(keep=&final_vars);
+run;
+
+/* Step 4: Metadata */
+proc contents data=CREDIT.PD_MODEL_DATA_CH13_FINAL_25
+              out=CREDIT.FINAL_25_METADATA_CH13 noprint;
+run;
+proc stdize data=CREDIT.PD_MODEL_DATA_CH13_FINAL_25 out=model_data_prep method=std;
+    var dpd_max;
+run;

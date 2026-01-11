@@ -1,6 +1,6 @@
 """
 IV and WoE Analysis
-Calculates Information Value (IV) and Weight of Evidence (WoE) for numeric variables. Analyzes variable predictive power and creates bin-level statistics.
+Calculates Information Value (IV) and Weight of Evidence (WoE) and analyzes variable predictive powe.
 """
 
 import streamlit as st
@@ -352,8 +352,10 @@ def main():
         # Change button text for final step when all steps are completed
         if is_final_step and all_steps_completed:
             button_text = "Proceed to next Analysis"
-            if st.button(button_text, type="primary", disabled=True):
-                pass  # Disabled for now as requested
+            if st.button(button_text, type="primary", disabled=False):
+                # Navigate to collinear_analysis.py with scroll parameter
+                st.query_params.update({"project": "collinear_analysis.py", "scroll": "top"})
+                st.rerun()
         else:
             button_text = "Execute Step"
             if st.button(button_text, type="primary", disabled=execute_disabled):

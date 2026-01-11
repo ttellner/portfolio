@@ -1,6 +1,6 @@
 """
 Feature Engineering Analysis
-Performs feature engineering including exclusions, feature creation, imputation, and outlier capping.
+Performs feature engineering: exclusions, feature creation, imputation, and outlier capping.
 """
 
 import streamlit as st
