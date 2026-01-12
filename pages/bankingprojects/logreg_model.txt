@@ -1,0 +1,183 @@
+proc stdize 
+    data=CREDIT.PD_MODEL_DATA_CH13_FINAL_25 
+    out=model_data_prep_method=std;
+    var dpd_max;
+run;
+
+data model_data_prep;
+    set model_data_prep;
+
+    /* Remove problematic variables */
+    drop emi_to_income_ratio dpd_count_30_plus;
+
+    /* Adjust dpd_max to avoid quasi-separation */
+    dpd_max_adj = dpd_max + (ranuni(12345) * 0.01);
+run;
+
+/* 2.Train/Validation Split */
+proc surveyselect data=model_data_prep out=model_data samprate=0.7 outall seed=12345;
+run;
+
+data train valid;
+    set model_data;
+    if selected=1 then output train;
+    else output valid;
+run;
+
+/* 3 Stepwise Logistic Regression */
+proc logistic data=train outmodel=log_model_stepwise;
+    class employment_type (param=ref ref='Salaried');
+    model default_flag(event='1') =
+          dpd_max_adj
+          amount_income_term_score
+          annual_interest_rate
+          dpd_recent_flag
+          overdue_normalized
+          pos_transaction_volume
+          recovery_success_flag
+          risk_score
+          bureau_score
+          age
+          balance_utilization_score
+          behavior_score_gap
+          credit_card_utilization_pct
+          loan_size_score
+          avg_combined_score
+          application_date
+          account_tenure_months
+          account_open_date
+          / selection=stepwise slentry=0.05 slstay=0.05;
+    ods output SelectionSummary=step_summary;
+run;
+
+/* 4 Re-run Final Model with Forced Business Variables */
+proc logistic data=train outmodel=log_model_final;
+    class employment_type (param=ref ref='Salaried');
+    model default_flag(event='1') =
+          amount_income_term_score
+          annual_interest_rate
+          pos_transaction_volume
+          recovery_success_flag
+          /* Force-keep critical variables */
+          dpd_max_adj
+          risk_score
+          overdue_normalized
+          dpd_recent_flag
+          / selection=none;
+    score data=valid out=valid_scored priorevent=0.07 outroc=roc_valid;
+    score data=train out=train_scored priorevent=0.07 outroc=roc_train;
+run;
+
+/* 5 Create Deciles – Train */
+proc rank data=train_scored groups=10 out=train_deciles;
+    var P_1;
+    ranks decile;
+run;
+
+/* 6 Create Deciles – Validation */
+proc rank data=valid_scored groups=10 out=valid_deciles;
+    var P_1;
+    ranks decile;
+run;
+
+/* 7 Performance Summary – Train */
+proc sql;
+    create table train_perf as
+    select decile,
+           count(*) as total_obs,
+           sum(default_flag) as defaults,
+           mean(P_1) as avg_pred_prob
+    from train_deciles
+    group by decile
+    order by decile;
+quit;
+
+/* 8 Performance Summary – Validation */
+proc sql;
+    create table valid_perf as
+    select decile,
+           count(*) as total_obs,
+           sum(default_flag) as defaults,
+           mean(P_1) as avg_pred_prob
+    from valid_deciles
+    group by decile
+    order by decile;
+quit;
+
+/* Print Performance Tables */
+title "Model Performance – Training Data (Decile Summary)";
+proc print data=train_perf; run;
+
+title "Model Performance – Validation Data (Decile Summary)";
+proc print data=valid_perf; run;
+
+/* 1ROC Stats */
+title "ROC Stats – Training Data";
+proc print data=roc_train; run;
+
+title " ROC Stats – Validation Data";
+proc print data=roc_valid; run;
+
+/* Create Deciles for Train */
+proc rank data=train_scored groups=10 out=train_deciles;
+    var P_1; /* Predicted probability of default */
+    ranks decile;
+run;
+
+/* Create Deciles for Validation */
+proc rank data=valid_scored groups=10 out=valid_deciles;
+    var P_1;
+    ranks decile;
+run;
+
+/* Performance Summary – Train */
+proc sql;
+    create table train_perf as
+    select decile,
+           count(*) as total_obs,
+           sum(default_flag) as defaults,
+           mean(P_1) as avg_pred_prob
+    from train_deciles
+    group by decile
+    order by decile;
+quit;
+
+/* Performance Summary – Validation */
+proc sql;
+    create table valid_perf as
+    select decile,
+           count(*) as total_obs,
+           sum(default_flag) as defaults,
+           mean(P_1) as avg_pred_prob
+    from valid_deciles
+    group by decile
+    order by decile;
+quit;
+
+/* Print Results */
+title "Model Performance – Training Decile Summary";
+proc print data=train_perf; run;
+
+title "Model Performance – Validation Decile Summary";
+proc print data=valid_perf; run;
+Step 3 – ROC Curve Statistics
+
+title "ROC Curve Stats – Training Data";
+proc print data=roc_train; run;
+
+title "ROC Curve Stats – Validation Data";
+proc print data=roc_valid; run;
+This output includes AUC (c-statistic) and KS-related info.
+Step 4 – KS Statistic
+
+/* KS Statistic for Training */
+proc npar1way data=train_scored edf;
+    class default_flag;
+    var P_1;
+run;
+
+/* KS Statistic for Validation */
+proc npar1way data=valid_scored edf;
+    class default_flag;
+    var P_1;
+run;
