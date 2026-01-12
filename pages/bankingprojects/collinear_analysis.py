@@ -399,8 +399,8 @@ def main():
             is_final_step = current_step_idx == len(STEPS) - 1
             all_steps_completed = len(st.session_state.step_results) == len(STEPS)
             
-            # Change button text for final step when all steps are completed
-            if is_final_step and all_steps_completed:
+            # Show "Proceed to next Analysis" button when all steps are completed
+            if all_steps_completed:
                 button_text = "Proceed to next Analysis"
                 if st.button(button_text, type="primary", disabled=False):
                     # Navigate to logreg_model_analysis.py with scroll parameter

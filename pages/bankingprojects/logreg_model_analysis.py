@@ -611,17 +611,74 @@ def main():
                         plt.close(fig)
             
             elif step['number'] == 8:
+                # Show ROC Statistics from Step 7 if available
+                if 6 in st.session_state.step_results:
+                    step7_result = st.session_state.step_results[6]
+                    if isinstance(step7_result, dict):
+                        roc_train = step7_result.get('roc_train', {})
+                        roc_valid = step7_result.get('roc_valid', {})
+                        
+                        st.subheader("ROC Statistics Summary (from Step 7)")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown("**Training Data:**")
+                            st.metric("AUC (c-statistic)", f"{roc_train.get('auc', 0):.4f}")
+                            if roc_train.get('auc', 0) > 0:
+                                auc_interpretation = "Excellent" if roc_train.get('auc', 0) > 0.8 else \
+                                                   "Good" if roc_train.get('auc', 0) > 0.7 else \
+                                                   "Fair" if roc_train.get('auc', 0) > 0.6 else "Poor"
+                                st.caption(f"Model Performance: {auc_interpretation}")
+                        with col2:
+                            st.markdown("**Validation Data:**")
+                            st.metric("AUC (c-statistic)", f"{roc_valid.get('auc', 0):.4f}")
+                            if roc_valid.get('auc', 0) > 0:
+                                auc_interpretation = "Excellent" if roc_valid.get('auc', 0) > 0.8 else \
+                                                   "Good" if roc_valid.get('auc', 0) > 0.7 else \
+                                                   "Fair" if roc_valid.get('auc', 0) > 0.6 else "Poor"
+                                st.caption(f"Model Performance: {auc_interpretation}")
+                        
+                        # ROC Curve Plot
+                        if roc_train.get('fpr') is not None and roc_valid.get('fpr') is not None:
+                            st.subheader("ROC Curves")
+                            fig, ax = plt.subplots(figsize=(10, 8))
+                            
+                            # Plot ROC curves
+                            ax.plot(roc_train['fpr'], roc_train['tpr'], 
+                                   label=f"Training (AUC = {roc_train.get('auc', 0):.4f})", 
+                                   linewidth=2)
+                            ax.plot(roc_valid['fpr'], roc_valid['tpr'], 
+                                   label=f"Validation (AUC = {roc_valid.get('auc', 0):.4f})", 
+                                   linewidth=2)
+                            
+                            # Plot diagonal line (random classifier)
+                            ax.plot([0, 1], [0, 1], 'k--', label='Random Classifier (AUC = 0.50)', linewidth=1)
+                            
+                            ax.set_xlabel('False Positive Rate (1 - Specificity)', fontsize=12)
+                            ax.set_ylabel('True Positive Rate (Sensitivity)', fontsize=12)
+                            ax.set_title('ROC Curves: Training vs Validation', fontsize=14, fontweight='bold')
+                            ax.legend(loc='lower right', fontsize=11)
+                            ax.grid(True, alpha=0.3)
+                            ax.set_xlim([0.0, 1.0])
+                            ax.set_ylim([0.0, 1.05])
+                            
+                            st.pyplot(fig)
+                            plt.close(fig)
+                        
+                        st.markdown("---")
+                
+                # KS Statistics
                 if isinstance(result, dict):
                     ks_train = result.get('ks_train', {})
                     ks_valid = result.get('ks_valid', {})
                     
+                    st.subheader("KS Statistic")
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.subheader("Training KS Statistic")
+                        st.markdown("**Training Data:**")
                         st.metric("KS Statistic", f"{ks_train.get('ks_statistic', 0):.4f}")
                         st.metric("P-value", f"{ks_train.get('p_value', 0):.6f}")
                     with col2:
-                        st.subheader("Validation KS Statistic")
+                        st.markdown("**Validation Data:**")
                         st.metric("KS Statistic", f"{ks_valid.get('ks_statistic', 0):.4f}")
                         st.metric("P-value", f"{ks_valid.get('p_value', 0):.6f}")
 
