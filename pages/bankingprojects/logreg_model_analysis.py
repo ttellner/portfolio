@@ -370,38 +370,46 @@ def main():
                                     st.error("Please execute Step 2 first.")
                                 else:
                                     step2_result = st.session_state.step_results[1]
-                                    train_df = step2_result['train_df']
-                                    
-                                    # Force-keep critical variables (from SAS code)
-                                    final_features = [
-                                        'amount_income_term_score', 'annual_interest_rate',
-                                        'pos_transaction_volume', 'recovery_success_flag',
-                                        'dpd_max_adj', 'risk_score', 'overdue_normalized', 'dpd_recent_flag'
-                                    ]
-                                    
-                                    # Filter to only existing columns
-                                    available_features = [f for f in final_features if f in train_df.columns]
-                                    
-                                    final_result = train_final_logistic(train_df, available_features)
-                                    
-                                    result = {
-                                        'final_model': final_result['model'],
-                                        'feature_cols': final_result['feature_cols']
-                                    }
-                                    st.session_state.step_results[current_step_idx] = result
-                                    st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                    st.success(f"{step['name']} executed successfully! {len(final_result['feature_cols'])} features used")
-                                    st.rerun()
+                                    if not isinstance(step2_result, dict) or 'train_df' not in step2_result:
+                                        st.error("Step 2 result is missing 'train_df'. Please re-execute Step 2.")
+                                    else:
+                                        train_df = step2_result['train_df']
+                                        
+                                        # Force-keep critical variables (from SAS code)
+                                        final_features = [
+                                            'amount_income_term_score', 'annual_interest_rate',
+                                            'pos_transaction_volume', 'recovery_success_flag',
+                                            'dpd_max_adj', 'risk_score', 'overdue_normalized', 'dpd_recent_flag'
+                                        ]
+                                        
+                                        # Filter to only existing columns
+                                        available_features = [f for f in final_features if f in train_df.columns]
+                                        
+                                        final_result = train_final_logistic(train_df, available_features)
+                                        
+                                        result = {
+                                            'final_model': final_result['model'],
+                                            'feature_cols': final_result['feature_cols']
+                                        }
+                                        st.session_state.step_results[current_step_idx] = result
+                                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                        st.success(f"{step['name']} executed successfully! {len(final_result['feature_cols'])} features used")
+                                        st.rerun()
                             
                             # Step 5: Score Data
                             elif step['number'] == 5:
-                                if 3 not in st.session_state.step_results:
+                                if 1 not in st.session_state.step_results:
+                                    st.error("Please execute Step 2 first.")
+                                elif 3 not in st.session_state.step_results:
                                     st.error("Please execute Step 4 first.")
                                 else:
                                     step2_result = st.session_state.step_results[1]
                                     step4_result = st.session_state.step_results[3]
-                                    train_df = step2_result['train_df']
-                                    valid_df = step2_result['valid_df']
+                                    if 'train_df' not in step2_result or 'valid_df' not in step2_result:
+                                        st.error("Step 2 result is missing required data. Please re-execute Step 2.")
+                                    else:
+                                        train_df = step2_result['train_df']
+                                        valid_df = step2_result['valid_df']
                                     final_model = step4_result['final_model']
                                     feature_cols = step4_result['feature_cols']
                                     
@@ -423,25 +431,28 @@ def main():
                                     st.error("Please execute Step 5 first.")
                                 else:
                                     step5_result = st.session_state.step_results[4]
-                                    train_scored = step5_result['train_scored']
-                                    valid_scored = step5_result['valid_scored']
-                                    
-                                    train_deciles = create_deciles(train_scored)
-                                    valid_deciles = create_deciles(valid_scored)
-                                    
-                                    train_perf = calculate_performance_summary(train_deciles)
-                                    valid_perf = calculate_performance_summary(valid_deciles)
-                                    
-                                    result = {
-                                        'train_deciles': train_deciles,
-                                        'valid_deciles': valid_deciles,
-                                        'train_perf': train_perf,
-                                        'valid_perf': valid_perf
-                                    }
-                                    st.session_state.step_results[current_step_idx] = result
-                                    st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                    st.success(f"{step['name']} executed successfully!")
-                                    st.rerun()
+                                    if 'train_scored' not in step5_result or 'valid_scored' not in step5_result:
+                                        st.error("Step 5 result is missing required data. Please re-execute Step 5.")
+                                    else:
+                                        train_scored = step5_result['train_scored']
+                                        valid_scored = step5_result['valid_scored']
+                                        
+                                        train_deciles = create_deciles(train_scored)
+                                        valid_deciles = create_deciles(valid_scored)
+                                        
+                                        train_perf = calculate_performance_summary(train_deciles)
+                                        valid_perf = calculate_performance_summary(valid_deciles)
+                                        
+                                        result = {
+                                            'train_deciles': train_deciles,
+                                            'valid_deciles': valid_deciles,
+                                            'train_perf': train_perf,
+                                            'valid_perf': valid_perf
+                                        }
+                                        st.session_state.step_results[current_step_idx] = result
+                                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                        st.success(f"{step['name']} executed successfully!")
+                                        st.rerun()
                             
                             # Step 7: Calculate ROC Statistics
                             elif step['number'] == 7:
@@ -449,20 +460,23 @@ def main():
                                     st.error("Please execute Step 5 first.")
                                 else:
                                     step5_result = st.session_state.step_results[4]
-                                    train_scored = step5_result['train_scored']
-                                    valid_scored = step5_result['valid_scored']
-                                    
-                                    roc_train = calculate_roc_stats(train_scored)
-                                    roc_valid = calculate_roc_stats(valid_scored)
-                                    
-                                    result = {
-                                        'roc_train': roc_train,
-                                        'roc_valid': roc_valid
-                                    }
-                                    st.session_state.step_results[current_step_idx] = result
-                                    st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                    st.success(f"{step['name']} executed successfully!")
-                                    st.rerun()
+                                    if 'train_scored' not in step5_result or 'valid_scored' not in step5_result:
+                                        st.error("Step 5 result is missing required data. Please re-execute Step 5.")
+                                    else:
+                                        train_scored = step5_result['train_scored']
+                                        valid_scored = step5_result['valid_scored']
+                                        
+                                        roc_train = calculate_roc_stats(train_scored)
+                                        roc_valid = calculate_roc_stats(valid_scored)
+                                        
+                                        result = {
+                                            'roc_train': roc_train,
+                                            'roc_valid': roc_valid
+                                        }
+                                        st.session_state.step_results[current_step_idx] = result
+                                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                        st.success(f"{step['name']} executed successfully!")
+                                        st.rerun()
                             
                             # Step 8: Calculate KS Statistic
                             elif step['number'] == 8:
@@ -470,20 +484,23 @@ def main():
                                     st.error("Please execute Step 5 first.")
                                 else:
                                     step5_result = st.session_state.step_results[4]
-                                    train_scored = step5_result['train_scored']
-                                    valid_scored = step5_result['valid_scored']
-                                    
-                                    ks_train = calculate_ks_statistic(train_scored)
-                                    ks_valid = calculate_ks_statistic(valid_scored)
-                                    
-                                    result = {
-                                        'ks_train': ks_train,
-                                        'ks_valid': ks_valid
-                                    }
-                                    st.session_state.step_results[current_step_idx] = result
-                                    st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                    st.success(f"{step['name']} executed successfully!")
-                                    st.rerun()
+                                    if 'train_scored' not in step5_result or 'valid_scored' not in step5_result:
+                                        st.error("Step 5 result is missing required data. Please re-execute Step 5.")
+                                    else:
+                                        train_scored = step5_result['train_scored']
+                                        valid_scored = step5_result['valid_scored']
+                                        
+                                        ks_train = calculate_ks_statistic(train_scored)
+                                        ks_valid = calculate_ks_statistic(valid_scored)
+                                        
+                                        result = {
+                                            'ks_train': ks_train,
+                                            'ks_valid': ks_valid
+                                        }
+                                        st.session_state.step_results[current_step_idx] = result
+                                        st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
+                                        st.success(f"{step['name']} executed successfully!")
+                                        st.rerun()
                         
                         except Exception as e:
                             st.error(f"Error executing step: {str(e)}")
