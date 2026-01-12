@@ -70,8 +70,8 @@ if 'step_results' not in st.session_state:
 
 def load_data_from_file():
     """Load data from CSV file."""
-    # Primary input: model_ready_data.csv (from collinear_analysis.py)
-    data_file = current_dir / "data" / "model_ready_data.csv"
+    # Primary input: PD_MODEL_DATA_CH13_FINAL_25.CSV
+    data_file = current_dir / "data" / "PD_MODEL_DATA_CH13_FINAL_25.CSV"
     if data_file.exists():
         return pd.read_csv(data_file)
     
@@ -230,7 +230,7 @@ def main():
     This application builds and evaluates logistic regression models for credit risk prediction.
     
     **Instructions:**
-    1. Default data (model_ready_data.csv) is loaded automatically
+    1. Default data (PD_MODEL_DATA_CH13_FINAL_25.CSV) is loaded automatically
     2. Execute each step sequentially
     3. View model performance metrics and summaries
     4. Review ROC and KS statistics
@@ -251,7 +251,7 @@ def main():
         st.header("Data Information")
         if st.session_state.input_data is not None:
             st.success(f"Data loaded: {len(st.session_state.input_data):,} rows, {len(st.session_state.input_data.columns)} columns")
-            st.caption("Default: model_ready_data.csv")
+            st.caption("Default: PD_MODEL_DATA_CH13_FINAL_25.CSV")
         
         st.markdown("---")
         
@@ -278,8 +278,8 @@ def main():
     # Main content area
     if st.session_state.input_data is None:
         st.error("Error: Could not load default data file. Please ensure the following exists in the data folder:\n"
-                 "- model_ready_data.csv (from Collinearity Analysis)")
-        st.info("💡 **Tip:** Run the previous analysis steps to generate the required input file.")
+                 "- PD_MODEL_DATA_CH13_FINAL_25.CSV")
+        st.info("💡 **Tip:** Please ensure the default data file exists in the data folder.")
         return
     
     # Display current step
