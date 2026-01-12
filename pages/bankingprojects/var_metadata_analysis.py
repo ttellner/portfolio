@@ -366,7 +366,7 @@ def create_metadata_dictionary(input_df, step_results):
 
 def display_step_info(step):
     """Display step information and code."""
-    st.markdown(f'<div class="stage-header">Step {step["number"]}: {step["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="stage-header">{step["name"]}</div>', unsafe_allow_html=True)
     st.markdown(f"**Description:** {step['description']}")
     
     st.markdown("**Python Code:**")
@@ -438,7 +438,7 @@ def main():
             
             for i, step in enumerate(STEPS):
                 status = "✅" if i < st.session_state.current_step else "⏳"
-                if st.button(f"{status} Step {step['number']}: {step['name']}", 
+                if st.button(f"{status} {step['name']}", 
                             key=f"nav_{i}",
                             disabled=(i > st.session_state.current_step)):
                     st.session_state.current_step = i
@@ -496,7 +496,7 @@ def main():
                 st.rerun()
         else:
             if st.button("Execute Step", type="primary", disabled=execute_disabled):
-                with st.spinner(f"Executing Step {step['number']}..."):
+                with st.spinner(f"Executing {step['name']}..."):
                     try:
                         input_df = st.session_state.input_data.copy()
                         
@@ -518,7 +518,7 @@ def main():
                                 }
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully!")
+                                st.success(f"{step['name']} executed successfully!")
                                 st.rerun()
                         
                         # Special handling for Step 7
@@ -585,7 +585,7 @@ def main():
                                 result = step['function'](input_df)
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully!")
+                                st.success(f"{step['name']} executed successfully!")
                                 st.rerun()
                             
                             elif step['number'] == 2:
@@ -596,7 +596,7 @@ def main():
                                     result = step['function'](step1_result)
                                     st.session_state.step_results[current_step_idx] = result
                                     st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                    st.success(f"Step {step['number']} executed successfully!")
+                                    st.success(f"{step['name']} executed successfully!")
                                     st.rerun()
                             
                             elif step['number'] == 3:
@@ -609,7 +609,7 @@ def main():
                                     result = step['function'](step2_result, total_n)
                                     st.session_state.step_results[current_step_idx] = result
                                     st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                    st.success(f"Step {step['number']} executed successfully!")
+                                    st.success(f"{step['name']} executed successfully!")
                                     st.rerun()
                             
                             elif step['number'] == 5:
@@ -617,7 +617,7 @@ def main():
                                 result = step['function'](input_df, vars_list)
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully!")
+                                st.success(f"{step['name']} executed successfully!")
                                 st.rerun()
                             
                             elif step['number'] == 6:
@@ -625,7 +625,7 @@ def main():
                                 result = step['function'](input_df, cat_vars)
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully!")
+                                st.success(f"{step['name']} executed successfully!")
                                 st.rerun()
                     
                     except Exception as e:

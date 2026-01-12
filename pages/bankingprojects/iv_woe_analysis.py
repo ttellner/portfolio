@@ -181,13 +181,9 @@ def load_data_from_file():
     # Fallback: feat_eng_output.csv (from feat_eng_analysis.py Step 5)
     fallback_file = current_dir / "data" / "feat_eng_output.csv"
     if fallback_file.exists():
-        st.info("Using fallback data file: feat_eng_output.csv (from Feature Engineering Analysis Step 5)")
         return pd.read_csv(fallback_file)
     
-    # If neither exists, show error
-    st.error(f"Data file not found. Please ensure one of the following exists:\n"
-             f"- {data_file.name} (from Feature Engineering Analysis Step 6)\n"
-             f"- {fallback_file.name} (from Feature Engineering Analysis Step 5)")
+    # If neither exists, return None (error will be shown in main function)
     return None
 
 

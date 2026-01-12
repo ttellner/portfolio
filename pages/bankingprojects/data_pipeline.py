@@ -445,7 +445,7 @@ def main():
             
             for i, stage in enumerate(STAGES):
                 status = "✅" if i < st.session_state.current_stage else "⏳"
-                if st.button(f"{status} Stage {stage['number']}: {stage['name']}", 
+                if st.button(f"{status} {stage['name']}", 
                             key=f"nav_{i}",
                             disabled=(i > st.session_state.current_stage)):
                     st.session_state.current_stage = i
@@ -488,7 +488,7 @@ def main():
                 st.rerun()
         else:
             if st.button("▶️ Execute Stage", type="primary", disabled=execute_disabled):
-                with st.spinner(f"Executing Stage {stage['number']}..."):
+                with st.spinner(f"Executing {stage['name']}..."):
                     try:
                         # Get input data
                         if current_stage_idx == 0:
@@ -513,9 +513,9 @@ def main():
                         st.session_state.current_stage = min(current_stage_idx + 1, len(STAGES) - 1)
                         
                         if is_final_stage:
-                            st.success(f"Stage {stage['number']} executed successfully! Output saved to var_metadata_input.csv")
+                            st.success(f"{stage['name']} executed successfully! Output saved to var_metadata_input.csv")
                         else:
-                            st.success(f"Stage {stage['number']} executed successfully!")
+                            st.success(f"{stage['name']} executed successfully!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error executing stage: {str(e)}")
@@ -550,7 +550,7 @@ def main():
         st.markdown("---")
         csv = result_df.to_csv(index=False)
         st.download_button(
-            label=f"📥 Download Stage {stage['number']} Results (CSV)",
+            label=f"📥 Download {stage['name']} Results (CSV)",
             data=csv,
             file_name=f"stage_{stage['number']}_results.csv",
             mime="text/csv"

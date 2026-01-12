@@ -239,7 +239,7 @@ def load_data_from_file():
 
 def display_step_info(step):
     """Display step information and code."""
-    st.markdown(f'<div class="stage-header">Step {step["number"]}: {step["name"]}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="stage-header">{step["name"]}</div>', unsafe_allow_html=True)
     st.markdown(f"**Description:** {step['description']}")
     
     st.markdown("**Python Code:**")
@@ -312,7 +312,7 @@ def main():
             
             for i, step in enumerate(STEPS):
                 status = "✅" if i < st.session_state.current_step else "⏳"
-                if st.button(f"{status} Step {step['number']}: {step['name']}", 
+                if st.button(f"{status} {step['name']}", 
                             key=f"nav_{i}",
                             disabled=(i > st.session_state.current_step)):
                     # Ensure index is valid before setting
@@ -402,7 +402,7 @@ def main():
         else:
             button_text = "Execute Step"
             if st.button(button_text, type="primary", disabled=execute_disabled):
-                with st.spinner(f"Executing Step {step['number']}..."):
+                with st.spinner(f"Executing {step['name']}..."):
                     try:
                         input_df = st.session_state.input_data.copy()
                         
@@ -426,7 +426,7 @@ def main():
                             }
                             st.session_state.step_results[current_step_idx] = result
                             st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                            st.success(f"Step {step['number']} executed successfully! Excluded {excluded_count:,} records.")
+                            st.success(f"{step['name']} executed successfully! Excluded {excluded_count:,} records.")
                             st.rerun()
                         
                         # Step 2: Create features
@@ -442,7 +442,7 @@ def main():
                                 
                                 # Count new features created
                                 new_features = [col for col in result.columns if col not in df_input.columns]
-                                st.success(f"Step {step['number']} executed successfully! Created {len(new_features)} new features.")
+                                st.success(f"{step['name']} executed successfully! Created {len(new_features)} new features.")
                                 st.rerun()
                         
                         # Step 3: Calculate imputation statistics
@@ -454,7 +454,7 @@ def main():
                                 result = step3_calculate_impute_stats(step2_result)
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully!")
+                                st.success(f"{step['name']} executed successfully!")
                                 st.rerun()
                         
                         # Step 4: Calculate percentiles
@@ -466,7 +466,7 @@ def main():
                                 result = step6_calculate_percentiles(step2_result)
                                 st.session_state.step_results[current_step_idx] = result
                                 st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
-                                st.success(f"Step {step['number']} executed successfully!")
+                                st.success(f"{step['name']} executed successfully!")
                                 st.rerun()
                         
                         # Step 5: Apply imputation and capping
@@ -713,7 +713,7 @@ def main():
         # Step 1 summary
         if 0 in st.session_state.step_results:
             step1_result = st.session_state.step_results[0]
-            st.markdown("##### Step 1: Filter by Date Range & Apply Exclusions")
+            st.markdown("##### Filter by Date Range & Apply Exclusions")
             summary_table = pd.DataFrame({
                 'Metric': ['Initial Records', 'Excluded Records', 'Final Records'],
                 'Count': [step1_result['initial_count'], 
@@ -728,7 +728,7 @@ def main():
             step1_result = st.session_state.step_results[0]
             new_features = [col for col in step2_result.columns 
                            if col not in step1_result['filtered_data'].columns]
-            st.markdown("##### Step 2: Create Engineered Features")
+            st.markdown("##### Create Engineered Features")
             summary_table = pd.DataFrame({
                 'Metric': ['New Features Created'],
                 'Count': [len(new_features)],
@@ -740,7 +740,7 @@ def main():
         # Step 3 summary
         if 2 in st.session_state.step_results:
             step3_result = st.session_state.step_results[2]
-            st.markdown("##### Step 3: Calculate Imputation Statistics")
+            st.markdown("##### Calculate Imputation Statistics")
             summary_table = pd.DataFrame({
                 'Variable': ['bureau_score', 'total_emi', 'monthly_income'],
                 'Mean': [step3_result.get('bureau_score_mean', np.nan),
@@ -755,7 +755,7 @@ def main():
         # Step 4 summary
         if 3 in st.session_state.step_results:
             step4_result = st.session_state.step_results[3]
-            st.markdown("##### Step 4: Calculate Percentiles for Capping")
+            st.markdown("##### Calculate Percentiles for Capping")
             summary_table = pd.DataFrame({
                 'Variable': ['bureau_score', 'total_emi', 'monthly_income'],
                 '1st Percentile': [step4_result.get('bureau_score_p1', np.nan),
@@ -771,7 +771,7 @@ def main():
         if 4 in st.session_state.step_results:
             step5_result = st.session_state.step_results[4]
             miss_flag_cols = [col for col in step5_result.columns if col.endswith('_miss_flag')]
-            st.markdown("##### Step 5: Apply Imputation and Outlier Capping")
+            st.markdown("##### Apply Imputation and Outlier Capping")
             summary_table = pd.DataFrame({
                 'Metric': ['Final Rows', 'Final Columns', 'Missing Flags Created'],
                 'Count': [len(step5_result), len(step5_result.columns), len(miss_flag_cols)]
@@ -788,7 +788,7 @@ def main():
                 step6_data = step6_result
                 iv_table = pd.DataFrame()
             
-            st.markdown("##### Step 6: Calculate EDA Measures")
+            st.markdown("##### Calculate EDA Measures")
             summary_table = pd.DataFrame({
                 'Metric': ['Final Rows', 'Final Columns', 'Deciles Created', 'IV Table Rows'],
                 'Count': [len(step6_data), len(step6_data.columns), 
