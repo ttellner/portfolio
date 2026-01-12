@@ -9,6 +9,7 @@ import numpy as np
 from pathlib import Path
 import sys
 from typing import Optional
+import matplotlib.pyplot as plt
 
 # Add current directory to path for imports
 current_dir = Path(__file__).parent.absolute()
@@ -301,10 +302,8 @@ def main():
             # Change button text for final step when all steps are completed
             if is_final_step and all_steps_completed:
                 button_text = "Proceed to next Analysis"
-                if st.button(button_text, type="primary", disabled=False):
-                    # Navigate to streamlit_app.py (Credit Scorecard Models)
-                    st.query_params.update({"project": "streamlit_app.py", "scroll": "top"})
-                    st.rerun()
+                if st.button(button_text, type="primary", disabled=True):
+                    pass  # Disabled
             else:
                 button_text = "Execute Step"
                 if st.button(button_text, type="primary", disabled=execute_disabled):
@@ -564,13 +563,52 @@ def main():
                     roc_train = result.get('roc_train', {})
                     roc_valid = result.get('roc_valid', {})
                     
+                    # ROC Statistics Summary
+                    st.subheader("ROC Statistics Summary")
                     col1, col2 = st.columns(2)
                     with col1:
-                        st.subheader("Training ROC Statistics")
+                        st.markdown("**Training Data:**")
                         st.metric("AUC (c-statistic)", f"{roc_train.get('auc', 0):.4f}")
+                        if roc_train.get('auc', 0) > 0:
+                            auc_interpretation = "Excellent" if roc_train.get('auc', 0) > 0.8 else \
+                                               "Good" if roc_train.get('auc', 0) > 0.7 else \
+                                               "Fair" if roc_train.get('auc', 0) > 0.6 else "Poor"
+                            st.caption(f"Model Performance: {auc_interpretation}")
                     with col2:
-                        st.subheader("Validation ROC Statistics")
+                        st.markdown("**Validation Data:**")
                         st.metric("AUC (c-statistic)", f"{roc_valid.get('auc', 0):.4f}")
+                        if roc_valid.get('auc', 0) > 0:
+                            auc_interpretation = "Excellent" if roc_valid.get('auc', 0) > 0.8 else \
+                                               "Good" if roc_valid.get('auc', 0) > 0.7 else \
+                                               "Fair" if roc_valid.get('auc', 0) > 0.6 else "Poor"
+                            st.caption(f"Model Performance: {auc_interpretation}")
+                    
+                    # ROC Curve Plot
+                    if roc_train.get('fpr') is not None and roc_valid.get('fpr') is not None:
+                        st.subheader("ROC Curves")
+                        fig, ax = plt.subplots(figsize=(10, 8))
+                        
+                        # Plot ROC curves
+                        ax.plot(roc_train['fpr'], roc_train['tpr'], 
+                               label=f"Training (AUC = {roc_train.get('auc', 0):.4f})", 
+                               linewidth=2)
+                        ax.plot(roc_valid['fpr'], roc_valid['tpr'], 
+                               label=f"Validation (AUC = {roc_valid.get('auc', 0):.4f})", 
+                               linewidth=2)
+                        
+                        # Plot diagonal line (random classifier)
+                        ax.plot([0, 1], [0, 1], 'k--', label='Random Classifier (AUC = 0.50)', linewidth=1)
+                        
+                        ax.set_xlabel('False Positive Rate (1 - Specificity)', fontsize=12)
+                        ax.set_ylabel('True Positive Rate (Sensitivity)', fontsize=12)
+                        ax.set_title('ROC Curves: Training vs Validation', fontsize=14, fontweight='bold')
+                        ax.legend(loc='lower right', fontsize=11)
+                        ax.grid(True, alpha=0.3)
+                        ax.set_xlim([0.0, 1.0])
+                        ax.set_ylim([0.0, 1.05])
+                        
+                        st.pyplot(fig)
+                        plt.close(fig)
             
             elif step['number'] == 8:
                 if isinstance(result, dict):
