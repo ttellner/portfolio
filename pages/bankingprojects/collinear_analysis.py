@@ -698,6 +698,117 @@ def main():
                         st.dataframe(final_df.head(20), use_container_width=True)
                     
                     st.success(f"✅ Final dataset saved to model_ready_data.csv with {len(variables)} variables")
+    
+    # Display summary at bottom if all steps are completed
+    all_steps_completed = len(st.session_state.step_results) == len(STEPS)
+    if all_steps_completed and 2 in st.session_state.step_results:
+        st.markdown("---")
+        st.markdown("---")
+        st.markdown('<h2 class="main-header" style="font-size: 2rem; margin-top: 3rem;">Complete Analysis Summary</h2>', unsafe_allow_html=True)
+        
+        step3_result = st.session_state.step_results[2]
+        if isinstance(step3_result, dict):
+            column_summary = step3_result.get('column_summary', pd.DataFrame())
+            keep_list = step3_result.get('keep_list', [])
+            final_df = step3_result.get('final_df', pd.DataFrame())
+            variables = step3_result.get('variables', [])
+            vars_dropped_corr = step3_result.get('vars_dropped_corr', [])
+            vars_dropped_vif = step3_result.get('vars_dropped_vif', [])
+            vars_dropped_final = step3_result.get('vars_dropped_final', [])
+            
+            # Overall Summary Metrics
+            st.subheader("Overall Summary")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Starting Columns", f"{len(st.session_state.starting_columns)}")
+            with col2:
+                st.metric("Business Critical (Keep List)", f"{len(keep_list)}")
+            with col3:
+                st.metric("Final Columns", f"{len(variables)}")
+            with col4:
+                st.metric("Total Dropped", f"{len(st.session_state.starting_columns) - len(variables)}")
+            
+            # Column Summary Table
+            if not column_summary.empty:
+                st.subheader("Column Summary by Category")
+                
+                # Summary statistics
+                summary_stats = column_summary.groupby(['category', 'status']).size().reset_index(name='count')
+                summary_pivot = summary_stats.pivot_table(
+                    index='category', 
+                    columns='status', 
+                    values='count', 
+                    fill_value=0
+                )
+                
+                st.dataframe(summary_pivot, use_container_width=True)
+                
+                st.subheader("Detailed Column Summary")
+                st.dataframe(
+                    column_summary.sort_values(['category', 'status', 'variable']),
+                    use_container_width=True,
+                    height=400
+                )
+                
+                # Breakdown by category
+                st.subheader("Breakdown by Category")
+                
+                # Business Critical columns
+                business_critical = column_summary[column_summary['category'] == 'Business Critical']
+                if not business_critical.empty:
+                    st.markdown("**Business Critical Columns (From Keep List):**")
+                    kept_bc = business_critical[business_critical['status'] == 'Kept']
+                    dropped_bc = business_critical[business_critical['status'] != 'Kept']
+                    st.write(f"- Kept: {len(kept_bc)} columns")
+                    if len(kept_bc) > 0:
+                        st.dataframe(kept_bc[['variable', 'reason', 'status']], use_container_width=True)
+                    if len(dropped_bc) > 0:
+                        st.write(f"- Dropped: {len(dropped_bc)} columns (due to correlation/VIF filtering)")
+                        st.dataframe(dropped_bc[['variable', 'status']], use_container_width=True)
+                
+                # IV Filtered columns
+                iv_filtered = column_summary[column_summary['category'] == 'IV Filtered']
+                if not iv_filtered.empty:
+                    st.markdown("**IV Filtered Columns (Not in Keep List):**")
+                    kept_iv = iv_filtered[iv_filtered['status'] == 'Kept']
+                    dropped_iv = iv_filtered[iv_filtered['status'] != 'Kept']
+                    st.write(f"- Kept: {len(kept_iv)} columns")
+                    if len(kept_iv) > 0:
+                        st.dataframe(kept_iv[['variable', 'reason', 'status']], use_container_width=True)
+                    st.write(f"- Dropped: {len(dropped_iv)} columns")
+                    if len(dropped_iv) > 0:
+                        st.dataframe(dropped_iv[['variable', 'reason', 'status']], use_container_width=True)
+            
+            # Filtering Steps Summary
+            st.subheader("Filtering Steps Summary")
+            filtering_summary = pd.DataFrame({
+                'Step': [
+                    'Starting Columns',
+                    'After Correlation Filtering',
+                    'After VIF Filtering',
+                    'After Final Keep List Filter',
+                    'Final Columns'
+                ],
+                'Column Count': [
+                    len(st.session_state.starting_columns),
+                    len(st.session_state.starting_columns) - len(vars_dropped_corr),
+                    len(st.session_state.starting_columns) - len(vars_dropped_corr) - len(vars_dropped_vif),
+                    len(st.session_state.starting_columns) - len(vars_dropped_corr) - len(vars_dropped_vif) - len(vars_dropped_final),
+                    len(variables)
+                ],
+                'Dropped in Step': [
+                    '-',
+                    len(vars_dropped_corr),
+                    len(vars_dropped_vif),
+                    len(vars_dropped_final),
+                    '-'
+                ]
+            })
+            st.dataframe(filtering_summary, use_container_width=True, hide_index=True)
+            
+            # Final Variables List
+            st.subheader("Final Variables in model_ready_data.csv")
+            st.dataframe(pd.DataFrame({'variable': variables}), use_container_width=True)
 
 
 if __name__ == "__main__":
