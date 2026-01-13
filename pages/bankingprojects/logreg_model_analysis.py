@@ -1,5 +1,5 @@
 """
-Logistic Regression Model Analysis
+PD.6 Logistic Regression Model Analysis
 Builds and evaluates logistic regression models for credit risk prediction.
 """
 
@@ -30,7 +30,7 @@ from logreg_model_functions import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Logistic Regression Model Analysis",
+    page_title="PD.6 Logistic Regression Model Analysis",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -235,7 +235,7 @@ def main():
         </script>
         """, unsafe_allow_html=True)
     
-    st.markdown('<h1 class="main-header">Logistic Regression Model Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PD.6 Logistic Regression Model Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
     This application builds and evaluates logistic regression models for credit risk prediction.

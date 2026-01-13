@@ -1,5 +1,5 @@
 """
-Feature Engineering Analysis
+PD.3 Feature Engineering Analysis
 Performs feature engineering: exclusions, feature creation, imputation, and outlier capping.
 """
 
@@ -27,7 +27,7 @@ from feat_eng_functions import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Feature Engineering Analysis",
+    page_title="PD.3 Feature Engineering Analysis",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -270,7 +270,7 @@ def main():
         </script>
         """, unsafe_allow_html=True)
     
-    st.markdown('<h1 class="main-header">Feature Engineering Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PD.3 Feature Engineering Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
     This application performs feature engineering including data filtering, exclusion rules, 

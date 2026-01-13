@@ -1,5 +1,5 @@
 """
-Collinearity Analysis
+PD.5 Collinearity Analysis
 Performs correlation and VIF filtering to remove collinear variables.
 """
 
@@ -29,7 +29,7 @@ from iv_woe_functions import create_expanded_keep_list
 
 # Page configuration
 st.set_page_config(
-    page_title="Collinearity Analysis",
+    page_title="PD.5 Collinearity Analysis",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -297,7 +297,7 @@ def main():
         </script>
         """, unsafe_allow_html=True)
     
-    st.markdown('<h1 class="main-header">Collinearity Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PD.5 Collinearity Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
     This application performs collinearity analysis by filtering out highly correlated 

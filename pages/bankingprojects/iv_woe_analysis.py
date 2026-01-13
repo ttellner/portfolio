@@ -1,5 +1,5 @@
 """
-IV and WoE Analysis
+PD.4 IV and WoE Analysis
 Calculates Information Value (IV) and Weight of Evidence (WoE), analyzes variable predictive power.
 """
 
@@ -27,7 +27,7 @@ from iv_woe_functions import (
 
 # Page configuration
 st.set_page_config(
-    page_title="IV and WoE Analysis",
+    page_title="PD.4 IV and WoE Analysis",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -220,7 +220,7 @@ def main():
         </script>
         """, unsafe_allow_html=True)
     
-    st.markdown('<h1 class="main-header">IV and WoE Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PD.4 IV and WoE Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
     This application calculates Information Value (IV) and Weight of Evidence (WoE) 

@@ -1,5 +1,5 @@
 """
-Data Pipeline - Step-by-Step Execution
+PD.1 Data Pipeline Step-by-Step Execution
 Interactive step-by-step execution of data transformation pipeline.
 """
 
@@ -30,7 +30,7 @@ from data_pipeline_functions import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Data Pipeline - Step by Step",
+    page_title="PD.1 Data Pipeline Step-by-Step Execution",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -404,7 +404,7 @@ def main():
         </script>
         """, unsafe_allow_html=True)
     
-    st.markdown('<h1 class="main-header">Data Pipeline - Step by Step Execution</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PD.1 Data Pipeline Step-by-Step Execution</h1>', unsafe_allow_html=True)
     
     st.markdown("""
     This application allows you to execute each stage of an example data pipeline 

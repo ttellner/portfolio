@@ -1,5 +1,5 @@
 """
-Variable Metadata Analysis
+PD.2 Variable Metadata Analysis
 Analyzes variable metadata, missing values, duplicates, and data quality.
 """
 
@@ -29,7 +29,7 @@ from var_meta_functions import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Variable Metadata Analysis",
+    page_title="PD.2 Variable Metadata Analysis",
     page_icon="",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -397,7 +397,7 @@ def main():
         </script>
         """, unsafe_allow_html=True)
     
-    st.markdown('<h1 class="main-header">Variable Metadata Analysis</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">PD.2 Variable Metadata Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown("""
     This application analyzes variable metadata, missing values, duplicates, and data quality.
