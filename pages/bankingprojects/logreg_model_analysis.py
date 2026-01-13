@@ -283,6 +283,21 @@ def main():
                 st.session_state.current_step = 0
                 st.session_state.step_results = {}
                 st.rerun()
+            
+            # Download button for scored data
+            if 4 in st.session_state.step_results:
+                st.markdown("---")
+                st.header("Download Results")
+                output_file = current_dir / "data" / "logreg_scored_data.csv"
+                if output_file.exists():
+                    with open(output_file, 'rb') as f:
+                        st.download_button(
+                            label="Download logreg_scored_data.csv",
+                            data=f.read(),
+                            file_name="logreg_scored_data.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
         else:
             st.info("Please load data first")
     
@@ -426,9 +441,21 @@ def main():
                                     train_scored = score_data(train_df, final_model, feature_cols)
                                     valid_scored = score_data(valid_df, final_model, feature_cols)
                                     
+                                    # Combine train and validation data for export
+                                    train_scored_export = train_scored.copy()
+                                    train_scored_export['dataset_type'] = 'train'
+                                    valid_scored_export = valid_scored.copy()
+                                    valid_scored_export['dataset_type'] = 'validation'
+                                    combined_scored = pd.concat([train_scored_export, valid_scored_export], ignore_index=True)
+                                    
+                                    # Save to CSV
+                                    output_file = current_dir / "data" / "logreg_scored_data.csv"
+                                    combined_scored.to_csv(output_file, index=False)
+                                    
                                     result = {
                                         'train_scored': train_scored,
-                                        'valid_scored': valid_scored
+                                        'valid_scored': valid_scored,
+                                        'combined_scored': combined_scored
                                     }
                                     st.session_state.step_results[current_step_idx] = result
                                     st.session_state.current_step = min(current_step_idx + 1, len(STEPS) - 1)
@@ -555,6 +582,24 @@ def main():
                     st.subheader("Final Model Features")
                     st.write(f"**{len(feature_cols)} features used:**")
                     st.dataframe(pd.DataFrame({'feature': feature_cols}), use_container_width=True)
+            
+            elif step['number'] == 5:
+                if isinstance(result, dict):
+                    train_scored = result.get('train_scored', pd.DataFrame())
+                    valid_scored = result.get('valid_scored', pd.DataFrame())
+                    
+                    st.subheader("Scored Data Summary")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Training Rows", f"{len(train_scored):,}")
+                        if not train_scored.empty and 'P_1' in train_scored.columns:
+                            st.metric("Avg Probability (P_1)", f"{train_scored['P_1'].mean():.4f}")
+                    with col2:
+                        st.metric("Validation Rows", f"{len(valid_scored):,}")
+                        if not valid_scored.empty and 'P_1' in valid_scored.columns:
+                            st.metric("Avg Probability (P_1)", f"{valid_scored['P_1'].mean():.4f}")
+                    
+                    st.info("💡 Scored data with probabilities (P_1 column) has been saved to logreg_scored_data.csv. You can download it from the sidebar.")
             
             elif step['number'] == 6:
                 if isinstance(result, dict):
