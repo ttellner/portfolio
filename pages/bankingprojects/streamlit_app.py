@@ -43,7 +43,17 @@ from scorecard.output import (
 )
 
 # Default data file paths - use absolute paths based on file location
-DEFAULT_TRAINING_FILE = str(current_dir / "data" / "Application_Scorecard_Full_Table__25_Vars_.csv")
+# Try multiple filename variations for case-insensitive matching
+_data_dir = current_dir / "data"
+_default_training_file = None
+for filename in ["PD_MODEL_DATA_CH13_FINAL_25.csv", "PD_MODEL_DATA_CH13_FINAL_25.CSV", 
+                 "pd_model_data_ch13_final_25.csv", "PD_MODEL_DATA_CH13_FINAL_25.Csv"]:
+    if (_data_dir / filename).exists():
+        _default_training_file = str(_data_dir / filename)
+        break
+if _default_training_file is None:
+    _default_training_file = str(_data_dir / "PD_MODEL_DATA_CH13_FINAL_25.csv")  # Default fallback
+DEFAULT_TRAINING_FILE = _default_training_file
 DEFAULT_NEW_APPLICANT_FILE = str(current_dir / "data" / "New_Applicant_Dataset__500_Records_.csv")
 
 # Page configuration
@@ -254,7 +264,7 @@ def main():
         st.subheader("Model Selection")
         model_type = st.selectbox(
             "Select Model Type",
-            ['logistic_regression', 'random_forest', 'gradient_boosting', 'decision_tree', 'cnn'],
+            ['random_forest', 'gradient_boosting', 'decision_tree', 'cnn'],
             index=0,
             help="Choose the machine learning model"
         )
@@ -262,11 +272,7 @@ def main():
         # Model-specific parameters
         st.subheader("Model Parameters")
         
-        if model_type == 'logistic_regression':
-            max_iter = st.number_input("Max Iterations", min_value=100, max_value=10000, value=1000, step=100)
-            model_params = {'max_iter': max_iter}
-        
-        elif model_type == 'random_forest':
+        if model_type == 'random_forest':
             n_estimators = st.number_input("Number of Estimators", min_value=10, max_value=500, value=100, step=10)
             max_depth = st.number_input("Max Depth", min_value=1, max_value=50, value=10, step=1)
             model_params = {'n_estimators': n_estimators, 'max_depth': max_depth}
@@ -397,9 +403,8 @@ def main():
         # Run pipeline
         try:
             with st.spinner("Running scorecard pipeline..."):
-                # Determine use_woe based on model type
-                # Logistic Regression uses WOE, all others use raw data
-                use_woe = (model_type == 'logistic_regression')
+                # All models use raw data (WOE removed with logistic regression)
+                use_woe = False
                 
                 results = run_scorecard_pipeline_streamlit(
                     training_data=st.session_state.training_data,
@@ -478,8 +483,8 @@ def run_scorecard_pipeline_streamlit(
     if model_params is None:
         model_params = {}
     
-    # Map 'logistic_regression' to 'logistic' for scorecard modules
-    internal_model_type = 'logistic' if model_type == 'logistic_regression' else model_type
+    # Use model_type directly (no mapping needed)
+    internal_model_type = model_type
     
     # Auto-detect numeric columns for binning if vars_to_bin is None
     if vars_to_bin is None:
