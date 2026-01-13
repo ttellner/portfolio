@@ -70,10 +70,21 @@ if 'step_results' not in st.session_state:
 
 def load_data_from_file():
     """Load data from CSV file."""
-    # Primary input: PD_MODEL_DATA_CH13_FINAL_25.CSV
-    data_file = current_dir / "data" / "PD_MODEL_DATA_CH13_FINAL_25.CSV"
-    if data_file.exists():
-        return pd.read_csv(data_file)
+    # Primary input: PD_MODEL_DATA_CH13_FINAL_25.csv (try both uppercase and lowercase extension)
+    data_dir = current_dir / "data"
+    
+    # Try multiple variations for case-insensitive matching
+    file_variations = [
+        "PD_MODEL_DATA_CH13_FINAL_25.csv",  # lowercase extension (actual file)
+        "PD_MODEL_DATA_CH13_FINAL_25.CSV",  # uppercase extension
+        "pd_model_data_ch13_final_25.csv",  # all lowercase
+        "PD_MODEL_DATA_CH13_FINAL_25.Csv",  # mixed case
+    ]
+    
+    for filename in file_variations:
+        data_file = data_dir / filename
+        if data_file.exists():
+            return pd.read_csv(data_file)
     
     # If not exists, return None (error will be shown in main function)
     return None
@@ -230,7 +241,7 @@ def main():
     This application builds and evaluates logistic regression models for credit risk prediction.
     
     **Instructions:**
-    1. Default data (PD_MODEL_DATA_CH13_FINAL_25.CSV) is loaded automatically
+    1. Default data (PD_MODEL_DATA_CH13_FINAL_25.csv) is loaded automatically
     2. Execute each step sequentially
     3. View model performance metrics and summaries
     4. Review ROC and KS statistics
@@ -251,7 +262,7 @@ def main():
         st.header("Data Information")
         if st.session_state.input_data is not None:
             st.success(f"Data loaded: {len(st.session_state.input_data):,} rows, {len(st.session_state.input_data.columns)} columns")
-            st.caption("Default: PD_MODEL_DATA_CH13_FINAL_25.CSV")
+            st.caption("Default: PD_MODEL_DATA_CH13_FINAL_25.csv")
         
         st.markdown("---")
         
@@ -278,7 +289,7 @@ def main():
     # Main content area
     if st.session_state.input_data is None:
         st.error("Error: Could not load default data file. Please ensure the following exists in the data folder:\n"
-                 "- PD_MODEL_DATA_CH13_FINAL_25.CSV")
+                 "- PD_MODEL_DATA_CH13_FINAL_25.csv")
         st.info("💡 **Tip:** Please ensure the default data file exists in the data folder.")
         return
     
