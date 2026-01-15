@@ -1,6 +1,14 @@
 """
 Machine Learning for Banking and Finance
 ML/AI for Banking and Lending. Explore and run machine learning demos below.
+Projects that are spread across multiple Project Cards can be followed in order
+by the numbering in the title:
+
+PD: Probability of Default. Currently PD.1-PD.6
+LGD: Loss Given Default. Currently under construction.
+EAD: Exposure at Default. Currently under construction.
+
+Any projects without a number similar to these is standalone.
 https://via.placeholder.com/400x200?text=Banking+Finance
 """
 import streamlit as st
