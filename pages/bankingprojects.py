@@ -56,7 +56,9 @@ Projects that are spread across multiple Project Cards can be followed in order
 by the numbering in the title:
 
 PD: Probability of Default. Currently PD.1-PD.6
+
 LGD: Loss Given Default. Currently under construction.
+
 EAD: Exposure at Default. Currently under construction.
 
 Any projects without a number similar to these is standalone.""")
