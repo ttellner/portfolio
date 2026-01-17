@@ -336,7 +336,7 @@ def stage5_final_summary(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, 
 STAGES = [
     {
         'number': 1,
-        'name': 'Stage 1: Drop Unneeded Columns',
+        'name': 'Drop Unneeded Columns',
         'description': 'Drops unneeded columns from the dataset.',
         'function': stage1_drop_unneeded_columns,
         'code': '''
@@ -351,7 +351,7 @@ df_result = df.drop(columns=columns_to_drop)
     },
     {
         'number': 2,
-        'name': 'Stage 2: Drop Technical Identifiers & Engineered Sources',
+        'name': 'Drop Technical Identifiers & Engineered Sources',
         'description': 'Drops technical identifiers and engineered source variables.',
         'function': stage2_drop_technical_identifiers,
         'code': '''
@@ -368,7 +368,7 @@ df_result = df.drop(columns=columns_to_drop)
     },
     {
         'number': 3,
-        'name': 'Stage 3: Drop Variables with High Correlation',
+        'name': 'Drop Variables with High Correlation',
         'description': 'Creates correlation matrix, identifies pairs with Pearson correlation > 0.95, compares with hardcoded columns, but drops only hardcoded columns.',
         'function': stage3_drop_high_correlation,
         'code': '''
@@ -394,7 +394,7 @@ df_result = df.drop(columns=hardcoded_columns)
     },
     {
         'number': 4,
-        'name': 'Stage 4: Near-zero Variance Filtering',
+        'name': 'Near-zero Variance Filtering',
         'description': 'Gets frequencies for binary/flag variables, then scans and deletes columns with standard deviation < 0.01 or MIN=MAX.',
         'function': stage4_near_zero_variance_filtering,
         'code': '''
@@ -414,7 +414,7 @@ df_result = df.drop(columns=columns_to_drop)
     },
     {
         'number': 5,
-        'name': 'Stage 5: Final Summary',
+        'name': 'Final Summary',
         'description': 'Calculates missing values and keeps only variables with < 30% missing.',
         'function': stage5_final_summary,
         'code': '''
