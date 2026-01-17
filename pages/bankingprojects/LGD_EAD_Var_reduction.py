@@ -435,7 +435,7 @@ df_result = df[keep_vars].copy()
 
 def display_stage_info(stage):
     """Display information about the current stage."""
-    st.markdown(f'<h2 class="stage-header">Stage {stage["number"]}: {stage["name"]}</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h2 class="stage-header">{stage["name"]}</h2>', unsafe_allow_html=True)
     st.markdown(f"**Description:** {stage['description']}")
     st.markdown("---")
     
