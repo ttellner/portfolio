@@ -18,8 +18,8 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 from agents import PlanningAgent, RelationshipAgent, UnderwritingAgent, run_integrated_demo
+from llm_client import DEFAULT_OLLAMA_MODEL, get_llm_client, get_llm_status
 from mock_databases import APPLICATIONS
-from mock_llm import MockLLM
 
 
 APPLICATION_LABELS = {
@@ -41,14 +41,29 @@ def main() -> None:
         <b>Underwriting</b> (autonomous decision loop),
         <b>Planning</b> (origination DAG), and
         <b>Relationship</b> (memory + cross-sell).
-        All external systems are mocked for safe portfolio hosting.
+        Uses <b>Ollama</b> when a server is reachable (local dev); otherwise falls back to
+        mock responses for cloud/GitHub deployment.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
+    status = get_llm_status()
+    if status["mode"] == "LIVE":
+        st.success(f"LLM: Ollama LIVE — `{status['model']}` at `{status['host']}`")
+    else:
+        st.info(status["detail"])
+
     col1, col2 = st.columns([1, 2])
     with col1:
+        force_mock = st.checkbox("Force mock LLM", value=False, help="Skip Ollama even if it is running locally.")
+        model_options = status["available_models"] or [DEFAULT_OLLAMA_MODEL]
+        selected_model = st.selectbox(
+            "Ollama model",
+            options=model_options,
+            index=0,
+            disabled=force_mock or status["mode"] != "LIVE",
+        )
         app_id = st.selectbox(
             "Select application",
             options=list(APPLICATION_LABELS.keys()),
@@ -75,21 +90,27 @@ def main() -> None:
         st.info("Choose an application and click **Run agent workflow**.")
         return
 
-    with st.spinner("Running mock agent pipeline..."):
+    with st.spinner("Running agent pipeline..."):
+        llm = get_llm_client(force_mock=force_mock, model=selected_model)
         if run_mode == "Integrated demo (all 3 agents)":
-            output = run_integrated_demo(app_id)
+            output = run_integrated_demo(app_id, llm=llm, force_mock=force_mock, model=selected_model)
         elif run_mode == "Underwriting only":
-            output = {"underwriting": UnderwritingAgent(MockLLM()).cognitive_loop(app_id)}
+            output = {"underwriting": UnderwritingAgent(llm).cognitive_loop(app_id)}
         elif run_mode == "Planning only":
-            output = {"origination_plan": PlanningAgent(MockLLM()).decompose_origination(app_id)}
+            output = {"origination_plan": PlanningAgent(llm).decompose_origination(app_id)}
         else:
             applicant_id = APPLICATIONS[app_id]["applicant_id"]
             output = {
-                "relationship_memory": RelationshipAgent(llm=MockLLM()).handle_interaction(
+                "relationship_memory": RelationshipAgent(llm=llm).handle_interaction(
                     applicant_id,
                     "What products should we offer based on prior history?",
                 )
             }
+        output["llm_backend"] = {
+            "provider": getattr(llm, "provider", "mock"),
+            "model": getattr(llm, "model", "mock"),
+            "mode": "SIMULATION" if force_mock or getattr(llm, "provider", "") == "mock" else "LIVE",
+        }
 
     if "underwriting" in output:
         uw = output["underwriting"]
@@ -104,6 +125,12 @@ def main() -> None:
 
         st.markdown(f"**Strategy:** `{r['strategy']}`")
         st.markdown(f"**LLM summary:** {uw['llm_summary']}")
+        if "llm_backend" in output:
+            backend = output["llm_backend"]
+            st.caption(
+                f"Generated via {backend['provider']} "
+                f"({backend['mode']}, model: {backend.get('model', 'n/a')})"
+            )
 
         st.markdown("**Perception snapshot**")
         st.dataframe(pd.DataFrame([p]), use_container_width=True)

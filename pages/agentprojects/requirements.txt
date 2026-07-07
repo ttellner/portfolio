@@ -1,1 +1,8 @@
-# Agent projects use root portfolio requirements (streamlit, pandas).
+# Agent projects use the portfolio root requirements.txt.
+# Optional local Ollama settings (create a .env at repo root):
+#   OLLAMA_HOST=http://localhost:11434
+#   OLLAMA_MODEL=deepseek-v2:16b
+#
+# Cloud deploy (AWS App Runner): Ollama is not bundled in the container.
+# The demo auto-falls back to mock LLM unless you point OLLAMA_HOST at a
+# remote Ollama server you operate separately.

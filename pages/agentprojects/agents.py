@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from mock_databases import MockVectorDB
+from llm_client import LendingLLM, get_llm_client
 from mock_llm import MockLLM, MockResponse
 from mock_tools import (
     calculate_dti,
@@ -104,8 +105,8 @@ def build_action_plan(decision: str) -> list[dict]:
 class UnderwritingAgent:
     """Autonomous decision-making agent (Chapter 5 style cognitive loop)."""
 
-    def __init__(self, llm: MockLLM | None = None) -> None:
-        self.llm = llm or MockLLM()
+    def __init__(self, llm: LendingLLM | None = None) -> None:
+        self.llm = llm or get_llm_client()
         self.decision_history: list[dict] = []
 
     def cognitive_loop(self, application_id: str) -> dict:
@@ -144,8 +145,8 @@ class UnderwritingAgent:
 class PlanningAgent:
     """Planning agent that materializes origination DAG steps."""
 
-    def __init__(self, llm: MockLLM | None = None) -> None:
-        self.llm = llm or MockLLM()
+    def __init__(self, llm: LendingLLM | None = None) -> None:
+        self.llm = llm or get_llm_client()
 
     def decompose_origination(self, application_id: str) -> list[dict]:
         app = get_application(application_id)
@@ -167,9 +168,13 @@ class PlanningAgent:
 class RelationshipAgent:
     """Memory-augmented agent for episodic applicant context."""
 
-    def __init__(self, vector_db: MockVectorDB | None = None, llm: MockLLM | None = None) -> None:
+    def __init__(
+        self,
+        vector_db: MockVectorDB | None = None,
+        llm: LendingLLM | None = None,
+    ) -> None:
         self.vector_db = vector_db or MockVectorDB()
-        self.llm = llm or MockLLM()
+        self.llm = llm or get_llm_client()
 
     def handle_interaction(self, applicant_id: str, query: str) -> dict:
         memories = self.vector_db.search(applicant_id, query, top_k=3)
@@ -184,8 +189,13 @@ class RelationshipAgent:
         }
 
 
-def run_integrated_demo(application_id: str) -> dict:
-    llm = MockLLM()
+def run_integrated_demo(
+    application_id: str,
+    llm: LendingLLM | None = None,
+    force_mock: bool = False,
+    model: str | None = None,
+) -> dict:
+    llm = llm or get_llm_client(force_mock=force_mock, model=model)
     underwriter = UnderwritingAgent(llm)
     planner = PlanningAgent(llm)
     relationship = RelationshipAgent(llm=llm)
