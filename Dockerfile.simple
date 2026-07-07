@@ -54,7 +54,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # Install additional Python packages
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     nbconvert \
     nbformat \
     jupyter \
