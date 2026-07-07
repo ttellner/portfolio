@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-08-pip-venv
+ARG BUILD_DATE=2026-07-08-venv-pkg
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
@@ -17,6 +17,7 @@ ENV BUILD_DATE=${BUILD_DATE}
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-dev \
+    python3.11-venv \
     python3-pip \
     curl \
     wget \
