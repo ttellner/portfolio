@@ -167,6 +167,7 @@ project_dir = "pages"
 custom_order = [
     "bioinfprojects.py",
     "bankingprojects.py",
+    "agentprojects.py",
     "financeprojects.py",
     "gnnprojects.py",
     "gamedatascience.py",
