@@ -1,6 +1,6 @@
 # Simplified Dockerfile for testing (without Seurat to reduce build time)
 # Use this to test if basic setup works, then switch to main Dockerfile
-# Updated: 2025-01-13 - Force rebuild to fix ggplot2 installation
+# Updated: 2026-07-07 - Install R from CRAN (jammy-cran40) instead of Ubuntu 22.04 default R 4.1.2
 FROM ubuntu:22.04
 
 # Set environment variables to avoid interactive prompts
@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2025-01-13
+ARG BUILD_DATE=2026-07-07
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
@@ -18,14 +18,16 @@ RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-dev \
     python3-pip \
-    r-base \
-    r-base-dev \
     curl \
     wget \
     git \
     build-essential \
     pandoc \
     nginx \
+    software-properties-common \
+    dirmngr \
+    gnupg \
+    ca-certificates \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
@@ -41,6 +43,14 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     libbz2-dev \
     liblzma-dev \
+    && wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc \
+    | gpg --dearmor -o /usr/share/keyrings/r-project.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/r-project.gpg] https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/" \
+    > /etc/apt/sources.list.d/r-project.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends r-base r-base-dev \
+    && Rscript -e "if (getRversion() < '4.3.0') { cat('ERROR: R version too old:', R.version.string, '\n'); quit(status=1, save='no') }" \
+    && Rscript -e "cat('Installed', R.version.string, '\n')" \
     && rm -rf /var/lib/apt/lists/* \
     && which pandoc || (echo "ERROR: pandoc not found after installation" && exit 1) \
     && pandoc --version || (echo "ERROR: pandoc not working" && exit 1)

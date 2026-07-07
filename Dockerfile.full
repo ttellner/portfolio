@@ -8,21 +8,30 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 
-# Install system dependencies
+# Install system dependencies (R from CRAN jammy-cran40, not Ubuntu default R 4.1.2)
 RUN apt-get update && apt-get install -y \
     python3.11 \
     python3.11-dev \
     python3-pip \
-    r-base \
-    r-base-dev \
     curl \
     wget \
     git \
     build-essential \
     pandoc \
+    software-properties-common \
+    dirmngr \
+    gnupg \
+    ca-certificates \
     libcurl4-openssl-dev \
     libssl-dev \
     libxml2-dev \
+    && wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc \
+    | gpg --dearmor -o /usr/share/keyrings/r-project.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/r-project.gpg] https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/" \
+    > /etc/apt/sources.list.d/r-project.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends r-base r-base-dev \
+    && Rscript -e "if (getRversion() < '4.3.0') quit(status=1, save='no')" \
     && rm -rf /var/lib/apt/lists/*
 
 # Create symlinks for python and pip
