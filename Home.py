@@ -165,12 +165,12 @@ project_dir = "pages"
 
 # Define custom order manually (list exact filenames)
 custom_order = [
-    "bioinfprojects.py",
-    "bankingprojects.py",
     "agentprojects.py",
+    "bankingprojects.py",
     "financeprojects.py",
     "gnnprojects.py",
     "gamedatascience.py",
+    "bioinfprojects.py",
 ]
 
 # Keep only existing files that match your preferred order
