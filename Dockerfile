@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-08
+ARG BUILD_DATE=2026-07-08-pip-venv
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
@@ -66,12 +66,17 @@ WORKDIR /app
 # Copy requirements file first (for better Docker layer caching)
 COPY requirements.txt .
 
+# Use a virtualenv so pip does not conflict with Ubuntu apt Python packages (e.g. blinker)
+RUN python3 -m venv /opt/venv
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 # Install Python dependencies
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Install additional Python packages
-RUN pip3 install --no-cache-dir \
+RUN pip install --no-cache-dir \
     nbconvert \
     nbformat \
     jupyter \
