@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-08-venv-pkg
+ARG BUILD_DATE=2026-07-08-r-packages
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
@@ -44,6 +44,9 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     libbz2-dev \
     liblzma-dev \
+    libuv1-dev \
+    cmake \
+    libgit2-dev \
     && wget -qO- https://cloud.r-project.org/bin/linux/ubuntu/marutter_pubkey.asc \
     | gpg --dearmor -o /usr/share/keyrings/r-project.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/r-project.gpg] https://cloud.r-project.org/bin/linux/ubuntu jammy-cran40/" \
@@ -52,6 +55,8 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y --no-install-recommends r-base r-base-dev \
     && Rscript -e "if (getRversion() < '4.3.0') { cat('ERROR: R version too old:', R.version.string, '\n'); quit(status=1, save='no') }" \
     && Rscript -e "cat('Installed', R.version.string, '\n')" \
+    && echo 'options(repos = c(CRAN = "https://packagemanager.posit.co/cran/__linux__/jammy/latest"))' \
+    >> /etc/R/Rprofile.site \
     && rm -rf /var/lib/apt/lists/* \
     && which pandoc || (echo "ERROR: pandoc not found after installation" && exit 1) \
     && pandoc --version || (echo "ERROR: pandoc not working" && exit 1)
@@ -84,65 +89,12 @@ RUN pip install --no-cache-dir \
     ipython \
     scipy
 
-# Install basic R packages (without Seurat for faster builds)
-# Install ONLY rmarkdown with required dependencies (not suggested packages)
-RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('rmarkdown', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
-    Rscript -e "if (!require('rmarkdown', quietly=TRUE)) { stop('rmarkdown not installed') }"
+# Limit parallel R package compilation to reduce OOM risk on small builders
+ENV MAKEFLAGS=-j1
 
-# Install packages required by the R Markdown files
-# Install dplyr with required dependencies (needed for bioinformatics projects)
-RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('dplyr', dependencies=c('Depends', 'Imports'), quiet=TRUE)" && \
-    Rscript -e "if (!require('dplyr', quietly=TRUE)) { stop('dplyr not installed') }"
-
-# Install ggplot2 with required dependencies (needed for visualization)
-# Install all dependencies first, then ggplot2 in a separate step for better error visibility
-RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    cat('Installing ggplot2 dependencies...\\n'); \
-    install.packages(c('farver', 'labeling', 'RColorBrewer', 'viridisLite'), \
-    dependencies=FALSE, quiet=FALSE)" && \
-    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    cat('Installing more ggplot2 dependencies...\\n'); \
-    install.packages(c('gtable', 'S7', 'scales'), dependencies=FALSE, quiet=FALSE)" && \
-    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    cat('R library paths:', paste(.libPaths(), collapse=': '), '\\n'); \
-    cat('Installing ggplot2...\\n'); \
-    result <- tryCatch({ \
-        install.packages('ggplot2', dependencies=FALSE, quiet=FALSE, repos='https://cran.rstudio.com/') \
-    }, error=function(e) { \
-        cat('ERROR during ggplot2 installation:', as.character(e$message), '\\n'); \
-        stop(e) \
-    }, warning=function(w) { \
-        cat('WARNING during ggplot2 installation:', as.character(w$message), '\\n') \
-    }); \
-    if (is.null(result)) { stop('ggplot2 installation returned NULL') }; \
-    cat('ggplot2 installation result:', paste(result, collapse=', '), '\\n'); \
-    cat('Checking immediately after install...\\n'); \
-    installed_now <- rownames(installed.packages()); \
-    cat('ggplot2 in installed packages?', 'ggplot2' %in% installed_now, '\\n')" && \
-    Rscript -e "installed <- rownames(installed.packages()); \
-    cat('Checking for ggplot2 in', length(installed), 'installed packages...\\n'); \
-    if (!'ggplot2' %in% installed) { \
-        cat('ERROR: ggplot2 not found. First 20 installed:', paste(head(installed, 20), collapse=', '), '...\\n'); \
-        stop('ggplot2 verification failed') \
-    } else { \
-        cat('SUCCESS: ggplot2 found in installed packages\\n') \
-    }" && \
-    Rscript -e "library(ggplot2); cat('SUCCESS: ggplot2 version', as.character(packageVersion('ggplot2')), 'installed and loaded\\n')" && \
-    Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('isoband', dependencies=FALSE, quiet=TRUE)" || echo "isoband optional - ggplot2 installed successfully"
-
-# Install patchwork (optional - used for combining plots)
-# Try to install, but don't fail the build if it doesn't work
-# The R Markdown file can render without it (some plot combining features may be limited)
-RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages('patchwork', dependencies=FALSE, quiet=TRUE)" || echo "patchwork installation failed - continuing without it"
-
-# Install other optional packages (skip if they fail)
-RUN Rscript -e "options(repos = c(CRAN = 'https://cran.rstudio.com/')); \
-    install.packages(c('jsonlite', 'readr', 'tidyr'), \
-    dependencies=FALSE, quiet=TRUE)" || echo "Optional R packages had issues, but continuing..."
+# Install R packages for bioinformatics / gamedatascience pages
+COPY scripts/docker-install-r-packages.R /tmp/docker-install-r-packages.R
+RUN Rscript /tmp/docker-install-r-packages.R
 
 # Note: Seurat is NOT installed - it's too large and complex for this build
 # Users will need to install it separately if needed, or use a different approach
