@@ -42,7 +42,7 @@ with st.sidebar:
 st.title("AI Agent Engineering Projects")
 st.write(
     """
-    Agentic AI demos inspired by cognitive architecture patterns (perceive → reason → plan → act → learn).
+    Agentic AI demos depicting cognitive architecture patterns (perceive → reason → plan → act → learn).
     Current focus: lender workflows for application fraud, creditworthiness, default-risk scoring,
     and relationship cross-sell — all running on mock data for portfolio-safe deployment.
     """

@@ -1,4 +1,4 @@
-"""Three-agent lending architecture inspired by Chapter 5 cognitive patterns."""
+"""This agent lending architecture depicts cognitive patterns - the simplest of architectures one would normally find in practice."""
 
 from __future__ import annotations
 
