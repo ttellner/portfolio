@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import urllib.error
 import urllib.request
 from typing import Protocol
@@ -63,10 +64,36 @@ def _is_local_ollama_host(host: str) -> bool:
     return host.rstrip("/") in {"http://localhost:11434", "http://127.0.0.1:11434"}
 
 
-def _should_skip_ollama_probe(host: str) -> bool:
-    """Skip probing localhost on cloud deploys unless OLLAMA_HOST is explicitly set."""
+def _ollama_invite_password() -> str:
+    return os.getenv("OLLAMA_INVITE_PASSWORD", "").strip()
+
+
+def is_ollama_invite_configured() -> bool:
+    """True when server has both a remote host and invite password configured."""
+    return bool(_ollama_host_explicit() and _ollama_invite_password())
+
+
+def verify_ollama_invite_password(password: str) -> bool:
+    """Check invite password against OLLAMA_INVITE_PASSWORD (constant-time)."""
+    expected = _ollama_invite_password()
+    if not expected or not password:
+        return False
+    return secrets.compare_digest(password, expected)
+
+
+def _should_use_mock(invite_unlocked: bool) -> bool:
+    """Default to mock unless invite password unlocked live Ollama."""
     if _force_mock_from_env():
         return True
+    return not invite_unlocked
+
+
+def _should_skip_ollama_probe(host: str, invite_unlocked: bool = False) -> bool:
+    """Skip Ollama probes when mock mode is active or localhost on cloud without invite."""
+    if _should_use_mock(invite_unlocked):
+        return True
+    if invite_unlocked and _ollama_host_explicit():
+        return False
     return _is_hosted_deploy() and _is_local_ollama_host(host) and not _ollama_host_explicit()
 
 
@@ -163,13 +190,49 @@ class OllamaLLM:
             return fallback
 
 
-def get_llm_status(base_url: str | None = None, model: str | None = None) -> dict:
+def get_llm_status(
+    invite_unlocked: bool = False,
+    base_url: str | None = None,
+    model: str | None = None,
+) -> dict:
     """Summarize which LLM backend the demo will use."""
     _load_dotenv()
     host = (base_url or _ollama_host()).rstrip("/")
     model = model or _ollama_model()
 
-    if _should_skip_ollama_probe(host):
+    if _should_use_mock(invite_unlocked):
+        detail = (
+            "Simulation mode: mock underwriting narratives are active. "
+            "Enter the invite password to use live Ollama."
+        )
+        hint = ""
+        if is_ollama_invite_configured():
+            hint = (
+                "Invite-only Ollama is configured on this server. "
+                "Enter the password above to connect via the configured `OLLAMA_HOST`."
+            )
+        elif _is_hosted_deploy():
+            hint = (
+                "Hosted deploy: set `OLLAMA_HOST` and `OLLAMA_INVITE_PASSWORD` in Railway "
+                "to enable invite-only live Ollama."
+            )
+        else:
+            hint = (
+                "Local dev: set `OLLAMA_HOST` and `OLLAMA_INVITE_PASSWORD` in your `.env` file, "
+                "then enter the password above."
+            )
+        return {
+            "mode": "SIMULATION",
+            "provider": "mock",
+            "host": host,
+            "model": model,
+            "available_models": [],
+            "detail": detail,
+            "hint": hint,
+            "invite_configured": is_ollama_invite_configured(),
+        }
+
+    if not _ollama_host_explicit():
         return {
             "mode": "SIMULATION",
             "provider": "mock",
@@ -177,14 +240,23 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
             "model": model,
             "available_models": [],
             "detail": (
-                "Simulation mode: mock underwriting narratives are active. "
-                "This is normal for the hosted portfolio site."
+                "Invite accepted, but `OLLAMA_HOST` is not configured on this server. "
+                "Using simulation mode."
             ),
-            "hint": (
-                "To use live Ollama locally, run `streamlit run Home.py` on your machine "
-                "with Ollama started. To point hosted deploys at a remote Ollama server, "
-                "set the `OLLAMA_HOST` environment variable in Railway."
-            ),
+            "hint": "Set `OLLAMA_HOST` to your remote Ollama URL in Railway or `.env`.",
+            "invite_configured": False,
+        }
+
+    if _should_skip_ollama_probe(host, invite_unlocked=True):
+        return {
+            "mode": "SIMULATION",
+            "provider": "mock",
+            "host": host,
+            "model": model,
+            "available_models": [],
+            "detail": "Simulation mode active (Ollama probe skipped).",
+            "hint": "",
+            "invite_configured": is_ollama_invite_configured(),
         }
 
     reachable = is_ollama_available(host)
@@ -194,13 +266,13 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
     if reachable and model_ready:
         mode = "LIVE"
         provider = "ollama"
-        detail = f"Ollama LIVE — model `{model}` at `{host}`."
+        detail = f"Invite unlocked — Ollama LIVE at `{host}` with model `{model}`."
         hint = ""
     elif reachable:
         mode = "LIVE"
         provider = "ollama"
         detail = (
-            f"Ollama reachable at `{host}`, but `{model}` is not installed. "
+            f"Invite unlocked — Ollama reachable at `{host}`, but `{model}` is not installed. "
             "Calls will fall back to mock responses on error."
         )
         hint = ""
@@ -208,12 +280,10 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
         mode = "SIMULATION"
         provider = "mock"
         detail = (
-            "Simulation mode: mock underwriting narratives are active. "
-            f"Ollama is not reachable at `{host}`."
+            f"Invite unlocked, but Ollama is not reachable at `{host}`. "
+            "Using simulation mode."
         )
-        hint = (
-            "Start Ollama locally (`ollama serve`) or set `OLLAMA_HOST` to a reachable server."
-        )
+        hint = "Verify your remote Ollama server is running and reachable from Railway."
 
     return {
         "mode": mode,
@@ -223,24 +293,23 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
         "available_models": models,
         "detail": detail,
         "hint": hint,
+        "invite_configured": is_ollama_invite_configured(),
     }
 
 
 def get_llm_client(
-  prefer_ollama: bool = True,
-  force_mock: bool = False,
-  model: str | None = None,
-  base_url: str | None = None,
+    invite_unlocked: bool = False,
+    model: str | None = None,
+    base_url: str | None = None,
 ) -> LendingLLM:
-    """Return OllamaLLM when reachable, otherwise MockLLM."""
+    """Return OllamaLLM when invite is unlocked and host is reachable, otherwise MockLLM."""
     _load_dotenv()
-    if force_mock or _force_mock_from_env():
-        client: LendingLLM = MockLLM()
-        return client
+    if _should_use_mock(invite_unlocked):
+        return MockLLM()
 
     host = (base_url or _ollama_host()).rstrip("/")
     selected_model = model or _ollama_model()
-    if prefer_ollama and not _should_skip_ollama_probe(host) and is_ollama_available(host):
+    if _ollama_host_explicit() and is_ollama_available(host):
         return OllamaLLM(model=selected_model, base_url=host)
 
     return MockLLM()

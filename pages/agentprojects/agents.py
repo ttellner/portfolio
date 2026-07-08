@@ -192,10 +192,10 @@ class RelationshipAgent:
 def run_integrated_demo(
     application_id: str,
     llm: LendingLLM | None = None,
-    force_mock: bool = False,
+    invite_unlocked: bool = False,
     model: str | None = None,
 ) -> dict:
-    llm = llm or get_llm_client(force_mock=force_mock, model=model)
+    llm = llm or get_llm_client(invite_unlocked=invite_unlocked, model=model)
     underwriter = UnderwritingAgent(llm)
     planner = PlanningAgent(llm)
     relationship = RelationshipAgent(llm=llm)

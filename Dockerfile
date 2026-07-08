@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-08-cpp11-order
+ARG BUILD_DATE=2026-07-08-tailscale-userspace
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
@@ -101,6 +101,10 @@ RUN Rscript /tmp/docker-install-r-packages.R
 
 # Copy application code
 COPY . .
+
+# Install Tailscale (userspace networking at runtime for Railway → home Ollama)
+RUN curl -fsSL https://tailscale.com/install.sh | sh && \
+    mkdir -p /var/run/tailscale /var/lib/tailscale
 
 # Copy nginx configuration for WebSocket support
 COPY nginx.conf /etc/nginx/nginx.conf
