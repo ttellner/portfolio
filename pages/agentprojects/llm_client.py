@@ -38,6 +38,38 @@ def _load_dotenv() -> None:
         pass
 
 
+def _is_hosted_deploy() -> bool:
+    """True when running on a cloud host where local Ollama is not expected."""
+    return any(
+        os.getenv(key)
+        for key in (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_SERVICE_NAME",
+            "AWS_EXECUTION_ENV",
+            "AWS_APP_RUNNER_SERVICE_ID",
+        )
+    )
+
+
+def _force_mock_from_env() -> bool:
+    return os.getenv("FORCE_MOCK_LLM", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _ollama_host_explicit() -> bool:
+    return bool(os.getenv("OLLAMA_HOST", "").strip())
+
+
+def _is_local_ollama_host(host: str) -> bool:
+    return host.rstrip("/") in {"http://localhost:11434", "http://127.0.0.1:11434"}
+
+
+def _should_skip_ollama_probe(host: str) -> bool:
+    """Skip probing localhost on cloud deploys unless OLLAMA_HOST is explicitly set."""
+    if _force_mock_from_env():
+        return True
+    return _is_hosted_deploy() and _is_local_ollama_host(host) and not _ollama_host_explicit()
+
+
 def is_ollama_available(base_url: str | None = None) -> bool:
     """Return True when an Ollama server responds at base_url."""
     base_url = (base_url or _ollama_host()).rstrip("/")
@@ -136,6 +168,25 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
     _load_dotenv()
     host = (base_url or _ollama_host()).rstrip("/")
     model = model or _ollama_model()
+
+    if _should_skip_ollama_probe(host):
+        return {
+            "mode": "SIMULATION",
+            "provider": "mock",
+            "host": host,
+            "model": model,
+            "available_models": [],
+            "detail": (
+                "Simulation mode: mock underwriting narratives are active. "
+                "This is normal for the hosted portfolio site."
+            ),
+            "hint": (
+                "To use live Ollama locally, run `streamlit run Home.py` on your machine "
+                "with Ollama started. To point hosted deploys at a remote Ollama server, "
+                "set the `OLLAMA_HOST` environment variable in Railway."
+            ),
+        }
+
     reachable = is_ollama_available(host)
     models = list_ollama_models(host) if reachable else []
     model_ready = any(model in name or name.startswith(model.split(":")[0]) for name in models)
@@ -143,20 +194,25 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
     if reachable and model_ready:
         mode = "LIVE"
         provider = "ollama"
-        detail = f"Ollama reachable at {host} with model `{model}`."
+        detail = f"Ollama LIVE — model `{model}` at `{host}`."
+        hint = ""
     elif reachable:
         mode = "LIVE"
         provider = "ollama"
         detail = (
-            f"Ollama reachable at {host}, but `{model}` is not installed. "
-            "The client will attempt the call and fall back to mock on error."
+            f"Ollama reachable at `{host}`, but `{model}` is not installed. "
+            "Calls will fall back to mock responses on error."
         )
+        hint = ""
     else:
         mode = "SIMULATION"
         provider = "mock"
         detail = (
-            f"Ollama not reachable at {host}. Using mock responses "
-            "(expected on AWS App Runner / GitHub-hosted deploy)."
+            "Simulation mode: mock underwriting narratives are active. "
+            f"Ollama is not reachable at `{host}`."
+        )
+        hint = (
+            "Start Ollama locally (`ollama serve`) or set `OLLAMA_HOST` to a reachable server."
         )
 
     return {
@@ -166,6 +222,7 @@ def get_llm_status(base_url: str | None = None, model: str | None = None) -> dic
         "model": model,
         "available_models": models,
         "detail": detail,
+        "hint": hint,
     }
 
 
@@ -177,13 +234,13 @@ def get_llm_client(
 ) -> LendingLLM:
     """Return OllamaLLM when reachable, otherwise MockLLM."""
     _load_dotenv()
-    if force_mock:
+    if force_mock or _force_mock_from_env():
         client: LendingLLM = MockLLM()
         return client
 
     host = (base_url or _ollama_host()).rstrip("/")
     selected_model = model or _ollama_model()
-    if prefer_ollama and is_ollama_available(host):
+    if prefer_ollama and not _should_skip_ollama_probe(host) and is_ollama_available(host):
         return OllamaLLM(model=selected_model, base_url=host)
 
     return MockLLM()

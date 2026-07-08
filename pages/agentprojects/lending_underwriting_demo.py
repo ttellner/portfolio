@@ -50,13 +50,21 @@ def main() -> None:
 
     status = get_llm_status()
     if status["mode"] == "LIVE":
-        st.success(f"LLM: Ollama LIVE — `{status['model']}` at `{status['host']}`")
+        st.success(status["detail"])
     else:
-        st.info(status["detail"])
+        st.success(status["detail"])
+        if status.get("hint"):
+            with st.expander("How to enable live Ollama"):
+                st.markdown(status["hint"])
 
     col1, col2 = st.columns([1, 2])
     with col1:
-        force_mock = st.checkbox("Force mock LLM", value=False, help="Skip Ollama even if it is running locally.")
+        simulation_mode = status["mode"] != "LIVE"
+        force_mock = st.checkbox(
+            "Force mock LLM",
+            value=simulation_mode,
+            help="Use mock responses instead of Ollama. Enabled automatically on hosted deploys.",
+        )
         model_options = status["available_models"] or [DEFAULT_OLLAMA_MODEL]
         selected_model = st.selectbox(
             "Ollama model",
