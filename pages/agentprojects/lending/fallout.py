@@ -1,10 +1,10 @@
-"""Graceful fallback decorator for agent tool calls."""
+"""Graceful fallback decorator for agent tool calls (fallout handling)."""
 
 import functools
 import time
 
 
-def fail_gracefully(fallback_value=None, max_retries: int = 0, chapter_ref: str = ""):
+def with_fallout(fallback_value=None, max_retries: int = 0, chapter_ref: str = ""):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
