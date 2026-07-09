@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from mock_databases import MockVectorDB
-from llm_client import LendingLLM, get_llm_client
-from mock_llm import MockLLM, MockResponse
-from mock_tools import (
+from .mock_databases import MockVectorDB
+from .llm_client import LendingLLM, get_llm_client
+from .mock_llm import MockLLM, MockResponse
+from .mock_tools import (
     calculate_dti,
     check_fraud_signals,
     check_sanctions,

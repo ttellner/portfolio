@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from resilience import fail_gracefully
-from mock_databases import (
+from .resilience import fail_gracefully
+from .mock_databases import (
     APPLICATIONS,
     APPLICANT_FRAUD,
     CREDIT_PROFILES,

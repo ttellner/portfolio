@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 from typing import Protocol
 
-from mock_llm import MockLLM, MockResponse
+from .mock_llm import MockLLM, MockResponse
 
 
 def _ollama_host() -> str:
