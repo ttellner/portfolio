@@ -7,6 +7,7 @@ from datetime import datetime
 from .mock_databases import MockVectorDB
 from .llm_client import LendingLLM, get_llm_client
 from .mock_llm import MockLLM, MockResponse
+from .fallout import coalesce
 from .mock_tools import (
     calculate_dti,
     check_fraud_signals,
@@ -39,31 +40,38 @@ def build_perception(application_id: str) -> dict:
         "purpose": app["purpose"],
         "requested_amount": app["requested_amount"],
         "stated_income": app["stated_income"],
-        "fico_score": bureau.get("fico_score"),
-        "fraud_score": fraud.get("fraud_score"),
-        "fraud_flags": fraud.get("flags", []),
-        "pd_12mo": pd.get("pd_12mo"),
-        "risk_band": pd.get("risk_band"),
-        "dti": dti.get("dti"),
-        "dti_within_policy": dti.get("within_policy"),
-        "identity_verified": identity.get("verified"),
-        "sanctions_hit": sanctions.get("hit"),
+        "fico_score": coalesce(bureau, "fico_score", 650),
+        "fraud_score": coalesce(fraud, "fraud_score", 0.0),
+        "fraud_flags": fraud.get("flags") or [],
+        "pd_12mo": coalesce(pd, "pd_12mo", 0.5),
+        "risk_band": coalesce(pd, "risk_band", "unknown"),
+        "dti": coalesce(dti, "dti", 0.5),
+        "dti_within_policy": bool(coalesce(dti, "within_policy", False)),
+        "identity_verified": bool(coalesce(identity, "verified", False)),
+        "sanctions_hit": bool(coalesce(sanctions, "hit", False)),
         "estimated_monthly_payment": payment,
     }
 
 
 def select_strategy(perception: dict) -> dict:
-    if perception["fraud_score"] >= 0.7 or perception["sanctions_hit"]:
+    fraud_score = coalesce(perception, "fraud_score", 1.0)
+    pd_12mo = coalesce(perception, "pd_12mo", 1.0)
+    fico_score = coalesce(perception, "fico_score", 0)
+    dti_within_policy = bool(coalesce(perception, "dti_within_policy", False))
+    identity_verified = bool(coalesce(perception, "identity_verified", False))
+    sanctions_hit = bool(coalesce(perception, "sanctions_hit", False))
+
+    if fraud_score >= 0.7 or sanctions_hit:
         decision = "escalate_fraud"
         strategy = "immediate_escalation"
-    elif perception["pd_12mo"] >= 0.20 or perception["fico_score"] < 600:
+    elif pd_12mo >= 0.20 or fico_score < 600:
         decision = "declined"
         strategy = "reject_with_explanation"
     elif (
-        perception["pd_12mo"] < 0.08
-        and perception["fico_score"] >= 700
-        and perception["dti_within_policy"]
-        and perception["identity_verified"]
+        pd_12mo < 0.08
+        and fico_score >= 700
+        and dti_within_policy
+        and identity_verified
     ):
         decision = "approved"
         strategy = "full_autonomous_resolution"

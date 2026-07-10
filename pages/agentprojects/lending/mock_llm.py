@@ -73,6 +73,14 @@ class MockLLM:
 
     def generate(self, prompt: str, **kwargs) -> MockResponse:
         scenario = self._route(prompt)
-        response = _SCENARIOS[scenario]
-        response.metadata = {"scenario": scenario, "provider": "mock"}
-        return response
+        template = _SCENARIOS[scenario]
+        return MockResponse(
+            content=template.content,
+            intent=template.intent,
+            confidence=template.confidence,
+            strategy=template.strategy,
+            required_tools=list(template.required_tools),
+            escalation_risk=template.escalation_risk,
+            reasoning_steps=list(template.reasoning_steps),
+            metadata={"scenario": scenario, "provider": "mock"},
+        )

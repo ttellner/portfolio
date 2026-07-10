@@ -5,7 +5,7 @@ Tool failures are handled via the fallout module's with_fallout decorator.
 
 from __future__ import annotations
 
-from .fallout import with_fallout
+from .fallout import coalesce, with_fallout
 from .mock_databases import (
     APPLICATIONS,
     APPLICANT_FRAUD,
@@ -23,9 +23,13 @@ def verify_identity(applicant_id: str) -> dict:
     return {"verified": True, "confidence": 0.97, "reason": "document_match"}
 
 
-@with_fallout(fallback_value={"fico_score": 650, "utilization_pct": 50})
+@with_fallout(fallback_value={"fico_score": 650, "utilization_pct": 50, "monthly_debt_payment": 0})
 def pull_credit_bureau(applicant_id: str) -> dict:
-    return dict(CREDIT_PROFILES.get(applicant_id, {"fico_score": 650, "utilization_pct": 50}))
+    profile = CREDIT_PROFILES.get(
+        applicant_id,
+        {"fico_score": 650, "utilization_pct": 50, "monthly_debt_payment": 0},
+    )
+    return dict(profile)
 
 
 @with_fallout(fallback_value={"fraud_score": 0.5, "flags": ["lookup_failed"]})
@@ -50,8 +54,9 @@ def score_default_risk(applicant_id: str, loan_amount: float) -> dict:
     bureau = pull_credit_bureau(applicant_id)
     payments = PAYMENT_HISTORY.get(applicant_id, [])
     late_count = sum(1 for p in payments if not p.get("on_time", True))
-    utilization = bureau.get("utilization_pct", 50) / 100
-    fico_factor = max(0, (700 - bureau.get("fico_score", 650)) / 200)
+    utilization = coalesce(bureau, "utilization_pct", 50) / 100
+    fico_score = coalesce(bureau, "fico_score", 650)
+    fico_factor = max(0, (700 - fico_score) / 200)
     amount_factor = min(0.15, loan_amount / 200000)
 
     pd = min(0.95, 0.05 + late_count * 0.08 + utilization * 0.2 + fico_factor * 0.3 + amount_factor)
@@ -63,28 +68,32 @@ def score_default_risk(applicant_id: str, loan_amount: float) -> dict:
 def calculate_dti(applicant_id: str, stated_income: int, new_monthly_payment: float) -> dict:
     bureau = pull_credit_bureau(applicant_id)
     monthly_income = max(stated_income / 12, 1)
-    existing = bureau.get("monthly_debt_payment", 0)
+    existing = coalesce(bureau, "monthly_debt_payment", 0)
     dti = (existing + new_monthly_payment) / monthly_income
     return {"dti": round(dti, 3), "within_policy": dti <= 0.43}
 
 
-@with_fallout(fallback_value={"hit": False})
+@with_fallout(fallback_value={"hit": False, "list": "OFAC_mock"})
 def check_sanctions(name: str) -> dict:
-  return {"hit": False, "list": "OFAC_mock"}
+    return {"hit": False, "list": "OFAC_mock"}
 
 
 @with_fallout(fallback_value={"offers": []})
 def recommend_products(applicant_id: str, decision: str, bureau: dict, pd: dict) -> dict:
+    risk_band = coalesce(pd, "risk_band", "unknown")
+    pd_12mo = coalesce(pd, "pd_12mo", 1.0)
+    fico_score = coalesce(bureau, "fico_score", 0)
+
     if decision != "approved":
         offers = []
-        if pd.get("risk_band") in {"medium", "high"}:
+        if risk_band in {"medium", "high"}:
             offers.append(
                 {
                     "product": "credit_builder_loan",
                     "reason": "Improve payment history before re-application",
                 }
             )
-        if bureau.get("fico_score", 0) < 620:
+        if fico_score < 620:
             offers.append(
                 {
                     "product": "secured_card",
@@ -94,10 +103,10 @@ def recommend_products(applicant_id: str, decision: str, bureau: dict, pd: dict)
         return {"offers": offers}
 
     offers = [{"product": "personal_loan", "reason": "Primary requested product"}]
-    if bureau.get("fico_score", 0) >= 760:
+    if fico_score >= 760:
         offers.append({"product": "premium_rewards_card", "reason": "Strong credit profile"})
         offers.append({"product": "heloc_draw", "reason": "Prior HELOC inquiry with no draw"})
-    if pd.get("pd_12mo", 1) < 0.06:
+    if pd_12mo < 0.06:
         offers.append({"product": "auto_refi_rate_lock", "reason": "Low default risk"})
     return {"offers": offers}
 

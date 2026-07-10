@@ -2,18 +2,27 @@
 
 import functools
 import time
+from typing import Any
 
 
-def with_fallout(fallback_value=None, max_retries: int = 0, chapter_ref: str = ""):
+def coalesce(mapping: dict, key: str, default: Any) -> Any:
+    """Return mapping[key] unless the value is missing or None."""
+    value = mapping.get(key, default)
+    return default if value is None else value
+
+
+def with_fallout(
+    fallback_value=None,
+    max_retries: int = 0,
+):
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             attempts = max_retries + 1
-            ref = f" ({chapter_ref})" if chapter_ref else ""
             for attempt in range(attempts):
                 try:
                     return func(*args, **kwargs)
-                except Exception as exc:
+                except Exception:
                     if attempt < attempts - 1:
                         time.sleep(2 ** attempt)
                         continue

@@ -158,7 +158,7 @@ def main() -> None:
         r = uw["reasoning"]
         m1.metric("FICO", p["fico_score"])
         m2.metric("Fraud score", p["fraud_score"])
-        m3.metric("PD (12mo)", f"{p['pd_12mo']:.1%}")
+        m3.metric("PD (12mo)", f"{p['pd_12mo']:.1%}" if p.get("pd_12mo") is not None else "n/a")
         m4.metric("Decision", r["decision"])
 
         st.markdown(f"**Strategy:** `{r['strategy']}`")
@@ -172,24 +172,24 @@ def main() -> None:
             )
 
         st.markdown("**Perception snapshot**")
-        st.dataframe(pd.DataFrame([p]), use_container_width=True)
+        st.dataframe(pd.DataFrame([p]), width="stretch")
         st.markdown("**Action plan (DAG)**")
-        st.dataframe(pd.DataFrame(uw["action_plan"]), use_container_width=True)
+        st.dataframe(pd.DataFrame(uw["action_plan"]), width="stretch")
 
         if uw["cross_sell_offers"]:
             st.markdown("**Cross-sell offers**")
-            st.dataframe(pd.DataFrame(uw["cross_sell_offers"]), use_container_width=True)
+            st.dataframe(pd.DataFrame(uw["cross_sell_offers"]), width="stretch")
             
     if "origination_plan" in output:
         st.subheader("Planning agent — origination DAG")
-        st.dataframe(pd.DataFrame(output["origination_plan"]), use_container_width=True)
+        st.dataframe(pd.DataFrame(output["origination_plan"]), width="stretch")
 
     if "relationship_memory" in output:
         st.subheader("Relationship agent — episodic memory")
         mem = output["relationship_memory"]
         st.markdown(f"**Response:** {mem['response']}")
         if mem["memories"]:
-            st.dataframe(pd.DataFrame(mem["memories"]), use_container_width=True)
+            st.dataframe(pd.DataFrame(mem["memories"]), width="stretch")
         else:
             st.write("No prior episodic memories found for this applicant.")
 
