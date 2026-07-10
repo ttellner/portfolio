@@ -11,7 +11,7 @@ def coalesce(mapping: dict, key: str, default: Any) -> Any:
     return default if value is None else value
 
 
-def with_fallout(
+def fallout_shelter(
     fallback_value=None,
     max_retries: int = 0,
 ):

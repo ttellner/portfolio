@@ -1,11 +1,11 @@
 """Mock external lending tools (KYC, bureau, fraud, scoring, cross-sell).
 
-Tool failures are handled via the fallout module's with_fallout decorator.
+Tool failures are handled via the fallout module's fallout_shelter decorator.
 """
 
 from __future__ import annotations
 
-from .fallout import coalesce, with_fallout
+from .fallout import coalesce, fallout_shelter
 from .mock_databases import (
     APPLICATIONS,
     APPLICANT_FRAUD,
@@ -15,7 +15,7 @@ from .mock_databases import (
 )
 
 
-@with_fallout(fallback_value={"verified": False, "confidence": 0.0})
+@fallout_shelter(fallback_value={"verified": False, "confidence": 0.0})
 def verify_identity(applicant_id: str) -> dict:
     fraud = APPLICANT_FRAUD.get(applicant_id, {})
     if fraud.get("identity_mismatch"):
@@ -23,7 +23,7 @@ def verify_identity(applicant_id: str) -> dict:
     return {"verified": True, "confidence": 0.97, "reason": "document_match"}
 
 
-@with_fallout(fallback_value={"fico_score": 650, "utilization_pct": 50, "monthly_debt_payment": 0})
+@fallout_shelter(fallback_value={"fico_score": 650, "utilization_pct": 50, "monthly_debt_payment": 0})
 def pull_credit_bureau(applicant_id: str) -> dict:
     profile = CREDIT_PROFILES.get(
         applicant_id,
@@ -32,7 +32,7 @@ def pull_credit_bureau(applicant_id: str) -> dict:
     return dict(profile)
 
 
-@with_fallout(fallback_value={"fraud_score": 0.5, "flags": ["lookup_failed"]})
+@fallout_shelter(fallback_value={"fraud_score": 0.5, "flags": ["lookup_failed"]})
 def check_fraud_signals(application_id: str, device_id: str, applicant_id: str) -> dict:
     device = DEVICE_RISK.get(device_id, {"risk_score": 0.2, "flags": []})
     applicant = APPLICANT_FRAUD.get(applicant_id, {})
@@ -49,7 +49,7 @@ def check_fraud_signals(application_id: str, device_id: str, applicant_id: str) 
     return {"fraud_score": round(score, 2), "flags": sorted(set(flags))}
 
 
-@with_fallout(fallback_value={"pd_12mo": 0.5, "risk_band": "unknown"})
+@fallout_shelter(fallback_value={"pd_12mo": 0.5, "risk_band": "unknown"})
 def score_default_risk(applicant_id: str, loan_amount: float) -> dict:
     bureau = pull_credit_bureau(applicant_id)
     payments = PAYMENT_HISTORY.get(applicant_id, [])
@@ -64,7 +64,7 @@ def score_default_risk(applicant_id: str, loan_amount: float) -> dict:
     return {"pd_12mo": round(pd, 3), "risk_band": band}
 
 
-@with_fallout(fallback_value={"dti": 0.5, "within_policy": False})
+@fallout_shelter(fallback_value={"dti": 0.5, "within_policy": False})
 def calculate_dti(applicant_id: str, stated_income: int, new_monthly_payment: float) -> dict:
     bureau = pull_credit_bureau(applicant_id)
     monthly_income = max(stated_income / 12, 1)
@@ -73,12 +73,12 @@ def calculate_dti(applicant_id: str, stated_income: int, new_monthly_payment: fl
     return {"dti": round(dti, 3), "within_policy": dti <= 0.43}
 
 
-@with_fallout(fallback_value={"hit": False, "list": "OFAC_mock"})
+@fallout_shelter(fallback_value={"hit": False, "list": "OFAC_mock"})
 def check_sanctions(name: str) -> dict:
     return {"hit": False, "list": "OFAC_mock"}
 
 
-@with_fallout(fallback_value={"offers": []})
+@fallout_shelter(fallback_value={"offers": []})
 def recommend_products(applicant_id: str, decision: str, bureau: dict, pd: dict) -> dict:
     risk_band = coalesce(pd, "risk_band", "unknown")
     pd_12mo = coalesce(pd, "pd_12mo", 1.0)
