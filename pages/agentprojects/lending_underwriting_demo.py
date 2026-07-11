@@ -1,5 +1,5 @@
 """
-Lending Underwriting Multi-Agent Demo
+Lending Underwriting Agent Demo
 Interactive fraud, creditworthiness, default-risk, and cross-sell agent workflow.
 https://via.placeholder.com/400x200?text=AI+Lending+Agents
 """
@@ -52,7 +52,7 @@ def main() -> None:
     st.markdown(
         """
         <div style="max-width:900px;margin:0 auto;text-align:justify;">
-        Portfolio demo built on a Chapter 5-style cognitive architecture:
+        Portfolio demo built simple cognitive agents architecture:
         <b>Underwriting</b> (autonomous decision loop),
         <b>Planning</b> (origination DAG), and
         <b>Relationship</b> (memory + cross-sell).
@@ -110,10 +110,16 @@ def main() -> None:
         st.subheader("Architecture")
         st.markdown(
             """
-            1. **Perception** — bureau, fraud, payment history, DTI  
-            2. **Cognition** — approve / decline / review / escalate fraud  
-            3. **Planning** — KYC → bureau → score → decision → cross-sell  
-            4. **Memory** — episodic vector search for prior interactions  
+            1. **Perception** — Gathers bureau, fraud, default risk, DTI, identity, and sanctions data into a snapshot 
+            2. **Cognition** — The LLM turn that snapshot into approve/decline/review/fraud decisions, action plans, and cross-sell offers
+            3. **Planning** — Builds the origination DAG (KYC → bureau → score → DTI → decision → cross-sell).
+            4. **Memory** — Searches episodic memories, queries the LLM with context, and stores new interactions. 
+            
+            This is best described as a hybrid demo — a traditional underwriting rules engine dressed in an agentic cognitive architecture. 
+            It illustrates perception, cognition, planning, and memory, but the actual control logic is still largely deterministic and 
+            bank-like rather than open-ended agent autonomy. 
+            
+            The LLM sits on top as a commentary and interaction layer, similar to putting GPT on top of a bank's existing decision engine.
             """
         )
 
