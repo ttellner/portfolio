@@ -111,7 +111,7 @@ def build_action_plan(decision: str) -> list[dict]:
 
 
 class UnderwritingAgent:
-    """Autonomous decision-making agent (Chapter 5 style cognitive loop)."""
+    """Autonomous decision-making agent."""
 
     def __init__(self, llm: LendingLLM | None = None) -> None:
         self.llm = llm or get_llm_client()

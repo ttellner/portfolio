@@ -111,7 +111,7 @@ def main() -> None:
         st.markdown(
             """
             1. **Perception** — Gathers bureau, fraud, default risk, DTI, identity, and sanctions data into a snapshot 
-            2. **Cognition** — The LLM turn that snapshot into approve/decline/review/fraud decisions, action plans, and cross-sell offers
+            2. **Cognition** — Convert into approve/decline/review/fraud decisions, action plans, and cross-sell offers
             3. **Planning** — Builds the origination DAG (KYC → bureau → score → DTI → decision → cross-sell).
             4. **Memory** — Searches episodic memories, queries the LLM with context, and stores new interactions. 
             
