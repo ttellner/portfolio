@@ -43,6 +43,13 @@ def _handle_invite_password(password: str) -> None:
     else:
         st.session_state.ollama_invite_unlocked = False
 
+st.title("AI Agent Engineering Projects")
+st.write(
+    """
+    Agentic AI demo. Current focus: lender workflows for application fraud, creditworthiness, default-risk scoring,
+    and relationship cross-sell.
+    """
+)
 def main() -> None:
     st.markdown(
         '<h1 style="text-align:center;color:#1f77b4;">Lending Underwriting Agent Demo - Level 1</h1>',
