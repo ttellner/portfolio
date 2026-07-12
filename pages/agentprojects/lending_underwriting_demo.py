@@ -5,10 +5,11 @@ https://via.placeholder.com/400x200?text=AI+Lending+Agent
 """
 
 from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
-import pandas as pd
+
 import streamlit as st
 
 CURRENT_DIR = Path(__file__).parent.absolute()
@@ -17,7 +18,7 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 from lending.agents import UnderwritingAgent
-from lending.display import render_stat_cards
+from lending.display import render_stat_cards, render_table
 from lending.llm_client import (
     DEFAULT_OLLAMA_MODEL,
     get_llm_client,
@@ -32,8 +33,10 @@ EXAMPLE_PROMPTS = [
     "I'd like a home improvement line for a kitchen remodel.",
 ]
 
+
 def _invite_unlocked() -> bool:
     return bool(st.session_state.get("ollama_invite_unlocked", False))
+
 
 def _handle_invite_password(password: str) -> None:
     if not password:
@@ -43,6 +46,81 @@ def _handle_invite_password(password: str) -> None:
         st.session_state.ollama_invite_unlocked = True
     else:
         st.session_state.ollama_invite_unlocked = False
+
+
+def _balance_summary(balances: dict) -> dict:
+    return {
+        "checking": balances.get("checking", 0),
+        "savings": balances.get("savings", 0),
+        "total_unsecured_debt": balances.get("total_unsecured_debt", 0),
+        "credit_card_count": len(balances.get("credit_cards") or []),
+        "personal_loan_balance": (balances.get("personal_loan") or {}).get("balance", 0),
+    }
+
+
+def _analysis_summary(analysis: dict) -> dict:
+    """Flatten product analysis for safe table rendering."""
+    return {key: value for key, value in analysis.items() if not isinstance(value, (list, dict))}
+
+
+def _render_results(result: dict) -> None:
+    if result.get("reasoning", {}).get("decision") == "unsupported_request":
+        st.error(result.get("llm_summary", "Unsupported request."))
+        with st.expander("Raw JSON output"):
+            st.code(json.dumps(result, indent=2, default=str), language="json")
+        return
+
+    perception = result.get("perception") or {}
+    interp = perception.get("interpretation") or {}
+    analysis = result.get("analysis") or {}
+    reasoning = result.get("reasoning") or {}
+
+    st.subheader("Interpreted request")
+    st.markdown(
+        f"**Product:** `{interp.get('loan_product', 'unknown')}` "
+        f"(confidence {interp.get('confidence', 0):.0%}) — {interp.get('reason', '')}"
+    )
+
+    st.subheader("Decision")
+    render_stat_cards(
+        [
+            ("Decision", str(reasoning.get("decision", "n/a"))),
+            ("Risk factor", f"{analysis.get('risk_factor', 0):.0%}"),
+            ("Loan product", str(analysis.get("loan_product", "n/a"))),
+        ]
+    )
+
+    st.markdown(f"**LLM summary:** {result.get('llm_summary', '')}")
+
+    st.markdown("**Product analysis**")
+    render_table(_analysis_summary(analysis))
+
+    st.markdown("**Bank data used**")
+    bank_cols = st.columns(3)
+    with bank_cols[0]:
+        st.caption("Balances")
+        render_table(_balance_summary(perception.get("balances") or {}))
+    with bank_cols[1]:
+        st.caption("Direct deposits")
+        render_table((perception.get("direct_deposits") or {}).get("deposits") or [])
+    with bank_cols[2]:
+        st.caption("Mortgage / bureau")
+        render_table(
+            [{**(perception.get("mortgage") or {}), **(perception.get("credit_bureau") or {})}]
+        )
+
+    st.markdown("**Action plan**")
+    render_table(result.get("action_plan") or [])
+
+    mem = result.get("relationship_memory") or {}
+    st.markdown("**Episodic memory**")
+    st.markdown(f"_{mem.get('response', '')}_")
+    if mem.get("memories"):
+        render_table(mem["memories"])
+
+    with st.expander("Raw JSON output"):
+        st.code(json.dumps(result, indent=2, default=str), language="json")
+
 
 def main() -> None:
     st.markdown(
@@ -115,78 +193,37 @@ def main() -> None:
             """
         )
 
-    if not run_btn:
+    if run_btn:
+        if not user_prompt.strip():
+            st.warning("Please enter a loan request.")
+            return
+
+        invite_unlocked = _invite_unlocked()
+        with st.spinner("Running agent workflow..."):
+            try:
+                llm = get_llm_client(
+                    invite_unlocked=invite_unlocked,
+                    model=selected_model if live_ollama else None,
+                )
+                st.session_state["underwriting_result"] = (
+                    UnderwritingAgent(llm).cognitive_loop(user_prompt.strip())
+                )
+                st.session_state["underwriting_error"] = None
+            except Exception as exc:
+                st.session_state["underwriting_result"] = None
+                st.session_state["underwriting_error"] = str(exc)
+
+    if st.session_state.get("underwriting_error"):
+        st.error(f"Workflow failed: {st.session_state['underwriting_error']}")
+        return
+
+    result = st.session_state.get("underwriting_result")
+    if not result:
         st.info("Enter a loan request and click **Run agent workflow**.")
         return
 
-    if not user_prompt.strip():
-        st.warning("Please enter a loan request.")
-        return
+    _render_results(result)
 
-    invite_unlocked = _invite_unlocked()
-    with st.spinner("Running agent workflow..."):
-        llm = get_llm_client(invite_unlocked=invite_unlocked, model=selected_model if live_ollama else None)
-        result = UnderwritingAgent(llm).cognitive_loop(user_prompt.strip())
-
-    if result.get("reasoning", {}).get("decision") == "unsupported_request":
-        st.error(result["llm_summary"])
-        with st.expander("Raw JSON output"):
-            st.code(json.dumps(result, indent=2, default=str), language="json")
-        return
-
-    interp = result["perception"]["interpretation"]
-    analysis = result["analysis"]
-    reasoning = result["reasoning"]
-
-    st.subheader("Interpreted request")
-    st.markdown(
-        f"**Product:** `{interp['loan_product']}` "
-        f"(confidence {interp.get('confidence', 0):.0%}) — {interp.get('reason', '')}"
-    )
-
-    st.subheader("Decision")
-    render_stat_cards([
-        ("Decision", reasoning["decision"]),
-        ("Risk factor", f"{analysis.get('risk_factor', 0):.0%}"),
-        ("Loan product", analysis.get("loan_product", "n/a")),
-    ])
-
-    st.markdown(f"**LLM summary:** {result['llm_summary']}")
-
-    st.markdown("**Product analysis**")
-    st.dataframe(pd.DataFrame([analysis]), use_container_width=True)
-
-    st.markdown("**Bank data used**")
-    bank_cols = st.columns(3)
-    with bank_cols[0]:
-        st.markdown("**Balances**")
-        st.dataframe(pd.DataFrame([result["perception"]["balances"]]), use_container_width=True)
-    with bank_cols[1]:
-        st.markdown("**Direct deposits**")
-        st.dataframe(
-            pd.DataFrame(result["perception"]["direct_deposits"]["deposits"]),
-            use_container_width=True,
-        )
-    with bank_cols[2]:
-        st.markdown("**Mortgage / bureau**")
-        st.dataframe(
-            pd.DataFrame([
-                {**result["perception"]["mortgage"], **result["perception"]["credit_bureau"]}
-            ]),
-            use_container_width=True,
-        )
-
-    st.markdown("**Action plan**")
-    st.dataframe(pd.DataFrame(result["action_plan"]), use_container_width=True)
-
-    mem = result["relationship_memory"]
-    st.markdown("**Episodic memory**")
-    st.markdown(f"_{mem['response']}_")
-    if mem["memories"]:
-        st.dataframe(pd.DataFrame(mem["memories"]), use_container_width=True)
-
-    with st.expander("Raw JSON output"):
-        st.code(json.dumps(result, indent=2, default=str), language="json")
 
 if __name__ == "__main__":
     main()
