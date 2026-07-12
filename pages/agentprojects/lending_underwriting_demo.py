@@ -45,7 +45,7 @@ def _handle_invite_password(password: str) -> None:
 
 def main() -> None:
     st.markdown(
-        '<h1 style="text-align:center;color:#1f77b4;">Lending Underwriting Agent Demo - Level 1</h1>',
+        '<h1 style="text-align:center;color:#1f77b4;">Lending Underwriting Agent Demo - The Decision Maker</h1>',
         unsafe_allow_html=True,
     )
 
