@@ -17,6 +17,7 @@ if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
 from lending.agents import UnderwritingAgent
+from lending.display import render_stat_cards
 from lending.llm_client import (
     DEFAULT_OLLAMA_MODEL,
     get_llm_client,
@@ -144,26 +145,27 @@ def main() -> None:
     )
 
     st.subheader("Decision")
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Decision", reasoning["decision"])
-    m2.metric("Risk factor", f"{analysis.get('risk_factor', 0):.0%}")
-    m3.metric("Loan product", analysis.get("loan_product", "n/a"))
+    render_stat_cards([
+        ("Decision", reasoning["decision"]),
+        ("Risk factor", f"{analysis.get('risk_factor', 0):.0%}"),
+        ("Loan product", analysis.get("loan_product", "n/a")),
+    ])
 
     st.markdown(f"**LLM summary:** {result['llm_summary']}")
 
     st.markdown("**Product analysis**")
-    st.dataframe(pd.DataFrame([analysis]), width="stretch")
+    st.dataframe(pd.DataFrame([analysis]), use_container_width=True)
 
     st.markdown("**Bank data used**")
     bank_cols = st.columns(3)
     with bank_cols[0]:
         st.markdown("**Balances**")
-        st.dataframe(pd.DataFrame([result["perception"]["balances"]]), width="stretch")
+        st.dataframe(pd.DataFrame([result["perception"]["balances"]]), use_container_width=True)
     with bank_cols[1]:
         st.markdown("**Direct deposits**")
         st.dataframe(
             pd.DataFrame(result["perception"]["direct_deposits"]["deposits"]),
-            width="stretch",
+            use_container_width=True,
         )
     with bank_cols[2]:
         st.markdown("**Mortgage / bureau**")
@@ -171,17 +173,17 @@ def main() -> None:
             pd.DataFrame([
                 {**result["perception"]["mortgage"], **result["perception"]["credit_bureau"]}
             ]),
-            width="stretch",
+            use_container_width=True,
         )
 
     st.markdown("**Action plan**")
-    st.dataframe(pd.DataFrame(result["action_plan"]), width="stretch")
+    st.dataframe(pd.DataFrame(result["action_plan"]), use_container_width=True)
 
     mem = result["relationship_memory"]
     st.markdown("**Episodic memory**")
     st.markdown(f"_{mem['response']}_")
     if mem["memories"]:
-        st.dataframe(pd.DataFrame(mem["memories"]), width="stretch")
+        st.dataframe(pd.DataFrame(mem["memories"]), use_container_width=True)
 
     with st.expander("Raw JSON output"):
         st.code(json.dumps(result, indent=2, default=str), language="json")

@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-08-tailscale-userspace
+ARG BUILD_DATE=2026-07-12-startup-hardening
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)
@@ -121,7 +121,7 @@ EXPOSE 8080
 
 # Health check for AWS App Runner (through nginx)
 # App Runner uses HTTP health checks, not TCP
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD curl --fail http://localhost:8080/_stcore/health || exit 1
 
 # Start both Streamlit (in background) and nginx (foreground)

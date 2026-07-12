@@ -16,6 +16,7 @@ CURRENT_DIR = Path(__file__).parent.absolute()
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
+from lending.display import render_stat_cards
 from lending.planning_agent import CUSTOMER_PROMPT, TARGET_CLOSE_DAYS, CloseSchedulePlanner
 from lending.llm_client import (
     DEFAULT_OLLAMA_MODEL,
@@ -134,53 +135,52 @@ def main() -> None:
     uw = result["underwriting"]
 
     st.subheader("Credit & capacity check")
-    m1, m2, m3, m4 = st.columns(4)
     analysis = uw["analysis"]
-    m1.metric("Decision", uw["decision"])
-    m2.metric("FICO", analysis.get("fico_score", "n/a"))
-    m3.metric("Equity line", f"${analysis.get('equity_line_amount', 0):,}")
-    m4.metric("Risk factor", f"{analysis.get('risk_factor', 0):.0%}")
+    render_stat_cards([
+        ("Decision", uw["decision"]),
+        ("FICO", str(analysis.get("fico_score", "n/a"))),
+        ("Equity line", f"${analysis.get('equity_line_amount', 0):,}"),
+        ("Risk factor", f"{analysis.get('risk_factor', 0):.0%}"),
+    ])
 
     st.subheader("Close schedule")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Target close (day)", TARGET_CLOSE_DAYS)
-    c2.metric("Projected close (day)", sim["projected_close_day"])
-    c3.metric(
-        "On track",
-        "Yes" if sim["on_track"] else "No — rescheduled",
-    )
+    render_stat_cards([
+        ("Target close (day)", str(TARGET_CLOSE_DAYS)),
+        ("Projected close (day)", str(sim["projected_close_day"])),
+        ("On track", "Yes" if sim["on_track"] else "No — rescheduled"),
+    ])
 
     st.markdown(f"**Planner summary:** {result['llm_summary']}")
 
     st.markdown("**Planned pipeline (baseline)**")
-    st.dataframe(pd.DataFrame(result["pipeline"]), width="stretch")
+    st.dataframe(pd.DataFrame(result["pipeline"]), use_container_width=True)
     st.caption(
         f"Baseline planned close: day {planned['projected_close_day']} "
         f"(target day {planned['target_close_day']})"
     )
 
     st.markdown("**Simulated actual durations**")
-    st.dataframe(pd.DataFrame([sim["actual_durations"]]), width="stretch")
+    st.dataframe(pd.DataFrame([sim["actual_durations"]]), use_container_width=True)
 
     st.markdown("**Monitor log (progress over time)**")
-    st.dataframe(pd.DataFrame(result["monitor_log"]), width="stretch")
+    st.dataframe(pd.DataFrame(result["monitor_log"]), use_container_width=True)
 
     if sim["revisions"]:
         st.markdown("**Reschedule events**")
-        st.dataframe(pd.DataFrame(sim["revisions"]), width="stretch")
+        st.dataframe(pd.DataFrame(sim["revisions"]), use_container_width=True)
     else:
         st.success("No rescheduling required — 20-day close target held.")
 
     st.markdown("**Bank data used**")
     bank_cols = st.columns(3)
     with bank_cols[0]:
-        st.dataframe(pd.DataFrame([uw["balances"]]), width="stretch")
+        st.dataframe(pd.DataFrame([uw["balances"]]), use_container_width=True)
     with bank_cols[1]:
-        st.dataframe(pd.DataFrame(uw["direct_deposits"]["deposits"]), width="stretch")
+        st.dataframe(pd.DataFrame(uw["direct_deposits"]["deposits"]), use_container_width=True)
     with bank_cols[2]:
         st.dataframe(
             pd.DataFrame([{**uw["mortgage"], **uw["credit_bureau"]}]),
-            width="stretch",
+            use_container_width=True,
         )
 
     with st.expander("Raw JSON output"):
