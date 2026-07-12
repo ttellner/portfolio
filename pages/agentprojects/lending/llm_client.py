@@ -192,18 +192,24 @@ class OllamaLLM:
         try:
             from openai import OpenAI
 
+            if loan_product == "close_planning":
+                system_content = (
+                    "You are a close-schedule planner for Maria Chen at Portfolio Bank. "
+                    "Respond in 2-4 concise sentences on whether the 20-day close target "
+                    f"is on track or was rescheduled (status={decision})."
+                )
+            else:
+                system_content = (
+                    "You are a lending assistant for Maria Chen at Portfolio Bank. "
+                    "Respond in 2-4 concise sentences explaining the underwriting "
+                    f"outcome for a {loan_product} request with decision={decision}."
+                )
+
             client = OpenAI(base_url=f"{self.base_url}/v1", api_key="ollama")
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a lending assistant for Maria Chen at Portfolio Bank. "
-                            "Respond in 2-4 concise sentences explaining the underwriting "
-                            f"outcome for a {loan_product} request with decision={decision}."
-                        ),
-                    },
+                    {"role": "system", "content": system_content},
                     {"role": "user", "content": prompt},
                 ],
                 max_tokens=kwargs.get("max_tokens", 256),

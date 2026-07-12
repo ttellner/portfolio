@@ -85,7 +85,9 @@ else:
     def sort_key(filename: str):
         if "lending_underwriting_demo" in filename:
             return (0, filename)
-        return (1, filename)
+        if "underwriting_demo_planning_agent" in filename:
+            return (1, filename)
+        return (2, filename)
 
     project_files = sorted(project_files, key=sort_key)
 

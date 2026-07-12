@@ -88,6 +88,16 @@ _NARRATION: dict[str, dict[str, str]] = {
             "line amount is below the preferred renovation threshold."
         ),
     },
+    "close_planning": {
+        "on_track": (
+            "The 20-day close target remains achievable. Income verification, title review, "
+            "appraisal sign-off, and closing are sequenced with no rescheduling required."
+        ),
+        "delayed": (
+            "The 20-day close target was missed due to upstream delays. The planner rescheduled "
+            "closing to the first feasible date after title and appraisal milestones cleared."
+        ),
+    },
 }
 
 
