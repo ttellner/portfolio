@@ -1,6 +1,6 @@
 """
 Lending Underwriting Agent Demo
-Single-agent fraud, creditworthiness, default-risk, and cross-sell workflow.
+Single-customer, prompt-driven debt consolidation, auto, and home improvement workflow.
 https://via.placeholder.com/400x200?text=AI+Lending+Agent
 """
 
@@ -23,12 +23,13 @@ from lending.llm_client import (
     get_llm_status,
     verify_ollama_invite_password,
 )
+from lending.mock_databases import CUSTOMER
 
-APPLICATION_LABELS = {
-    "app_1001": "Maria Chen — debt consolidation ($25k)",
-    "app_1002": "John Smith — auto loan ($15k) [fraud signals]",
-    "app_1003": "Amina Okonkwo — home improvement ($50k) [strong credit]",
-}
+EXAMPLE_PROMPTS = [
+    "I want a debt consolidation loan.",
+    "I need a car loan — what payment can I afford?",
+    "I'd like a home improvement line for a kitchen remodel.",
+]
 
 def _invite_unlocked() -> bool:
     return bool(st.session_state.get("ollama_invite_unlocked", False))
@@ -49,12 +50,12 @@ def main() -> None:
     )
 
     st.markdown(
-        """
+        f"""
         <div style="max-width:900px;margin:0 auto;text-align:justify;">
-        Single-agent portfolio demo with a simple cognitive loop:
-        <b>perceive</b> → <b>reason</b> → <b>plan</b> → <b>remember</b> → <b>narrate</b>.
-        The public demo runs in <b>simulation mode</b>. Invite-only access unlocks
-        live Ollama via a configured remote <code>OLLAMA_HOST</code>.
+        Single customer demo for <b>{CUSTOMER["name"]}</b>. Enter a natural-language loan request;
+        the agent interprets it (debt consolidation, auto loan, or home improvement), pulls
+        relevant bank data, applies product risk factors, and decides.
+        Simulation mode is default; invite-only Ollama unlocks live interpretation.
         </div>
         """,
         unsafe_allow_html=True,
@@ -72,12 +73,9 @@ def main() -> None:
         st.warning("Incorrect invite password. Using simulation mode.")
 
     status = get_llm_status(invite_unlocked=_invite_unlocked())
-    if status["mode"] == "LIVE":
-        st.success(status["detail"])
-    else:
-        st.success(status["detail"])
-        if status.get("hint"):
-            st.caption(status["hint"])
+    st.success(status["detail"])
+    if status.get("hint"):
+        st.caption(status["hint"])
 
     col1, col2 = st.columns([1, 2])
 
@@ -91,90 +89,102 @@ def main() -> None:
             disabled=not live_ollama,
         )
 
-        app_id = st.selectbox(
-            "Select application",
-            options=list(APPLICATION_LABELS.keys()),
-            format_func=lambda x: APPLICATION_LABELS[x],
+        user_prompt = st.text_area(
+            "Your loan request",
+            value=EXAMPLE_PROMPTS[0],
+            height=100,
+            help="Examples: debt consolidation, auto loan, home improvement / HELOC",
         )
+        st.caption("Try: " + " | ".join(f'"{p}"' for p in EXAMPLE_PROMPTS))
 
         run_btn = st.button("Run agent workflow", type="primary", use_container_width=True)
 
     with col2:
-        st.subheader("Architecture")
+        st.subheader("How it works")
         st.markdown(
             """
-            One **UnderwritingAgent** runs the full loop:
+            1. **Interpret** — LLM classifies your request into a loan product
+            2. **Gather** — pulls Maria's balances, deposits, mortgage, or bureau data
+            3. **Decide** — compares bank data to product risk factors
+            4. **Narrate** — LLM explains the outcome
 
-            1. **Perceive** — bureau, fraud, default risk, DTI, identity, sanctions
-            2. **Reason** — rules-based approve / decline / review / fraud escalation
-            3. **Plan** — decision action plan and origination DAG
-            4. **Remember** — episodic memory search and recall
-            5. **Narrate** — LLM summary of the underwriting outcome
-
-            This is a hybrid demo: deterministic bank-style control logic with an LLM
-            commentary layer on top, not open-ended agent autonomy.
+            **Debt consolidation** — unsecured balances vs savings and DTI  
+            **Auto loan** — max payment from verified direct deposits  
+            **Home improvement** — equity line from property value and mortgage
             """
         )
 
     if not run_btn:
-        st.info("Choose an application and click **Run agent workflow**.")
+        st.info("Enter a loan request and click **Run agent workflow**.")
+        return
+
+    if not user_prompt.strip():
+        st.warning("Please enter a loan request.")
         return
 
     invite_unlocked = _invite_unlocked()
     with st.spinner("Running agent workflow..."):
-        llm = get_llm_client(invite_unlocked=invite_unlocked, model=selected_model)
-        result = UnderwritingAgent(llm).cognitive_loop(app_id)
-        output = {
-            "underwriting": result,
-            "llm_backend": {
-                "provider": getattr(llm, "provider", "mock"),
-                "model": getattr(llm, "model", "mock"),
-                "mode": "SIMULATION" if getattr(llm, "provider", "") == "mock" else "LIVE",
-                "invite_unlocked": invite_unlocked,
-            },
-        }
+        llm = get_llm_client(invite_unlocked=invite_unlocked, model=selected_model if live_ollama else None)
+        result = UnderwritingAgent(llm).cognitive_loop(user_prompt.strip())
 
-    uw = output["underwriting"]
-    st.subheader("Underwriting agent — cognitive loop")
-    m1, m2, m3, m4 = st.columns(4)
-    p = uw["perception"]
-    r = uw["reasoning"]
-    m1.metric("FICO", p["fico_score"])
-    m2.metric("Fraud score", p["fraud_score"])
-    m3.metric("PD (12mo)", f"{p['pd_12mo']:.1%}" if p.get("pd_12mo") is not None else "n/a")
-    m4.metric("Decision", r["decision"])
+    if result.get("reasoning", {}).get("decision") == "unsupported_request":
+        st.error(result["llm_summary"])
+        with st.expander("Raw JSON output"):
+            st.code(json.dumps(result, indent=2, default=str), language="json")
+        return
 
-    st.markdown(f"**Strategy:** `{r['strategy']}`")
-    st.markdown(f"**LLM summary:** {uw['llm_summary']}")
+    interp = result["perception"]["interpretation"]
+    analysis = result["analysis"]
+    reasoning = result["reasoning"]
 
-    backend = output["llm_backend"]
-    st.caption(
-        f"Generated via {backend['provider']} "
-        f"({backend['mode']}, model: {backend.get('model', 'n/a')})"
+    st.subheader("Interpreted request")
+    st.markdown(
+        f"**Product:** `{interp['loan_product']}` "
+        f"(confidence {interp.get('confidence', 0):.0%}) — {interp.get('reason', '')}"
     )
 
-    st.markdown("**Perception snapshot**")
-    st.dataframe(pd.DataFrame([p]), width="stretch")
-    st.markdown("**Action plan (DAG)**")
-    st.dataframe(pd.DataFrame(uw["action_plan"]), width="stretch")
+    st.subheader("Decision")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Decision", reasoning["decision"])
+    m2.metric("Risk factor", f"{analysis.get('risk_factor', 0):.0%}")
+    m3.metric("Loan product", analysis.get("loan_product", "n/a"))
 
-    if uw["cross_sell_offers"]:
-        st.markdown("**Cross-sell offers**")
-        st.dataframe(pd.DataFrame(uw["cross_sell_offers"]), width="stretch")
+    st.markdown(f"**LLM summary:** {result['llm_summary']}")
 
-    st.subheader("Origination plan")
-    st.dataframe(pd.DataFrame(uw["origination_plan"]), width="stretch")
+    st.markdown("**Product analysis**")
+    st.dataframe(pd.DataFrame([analysis]), width="stretch")
 
-    st.subheader("Episodic memory")
-    mem = uw["relationship_memory"]
-    st.markdown(f"**Response:** {mem['response']}")
+    st.markdown("**Bank data used**")
+    bank_cols = st.columns(3)
+    with bank_cols[0]:
+        st.markdown("**Balances**")
+        st.dataframe(pd.DataFrame([result["perception"]["balances"]]), width="stretch")
+    with bank_cols[1]:
+        st.markdown("**Direct deposits**")
+        st.dataframe(
+            pd.DataFrame(result["perception"]["direct_deposits"]["deposits"]),
+            width="stretch",
+        )
+    with bank_cols[2]:
+        st.markdown("**Mortgage / bureau**")
+        st.dataframe(
+            pd.DataFrame([
+                {**result["perception"]["mortgage"], **result["perception"]["credit_bureau"]}
+            ]),
+            width="stretch",
+        )
+
+    st.markdown("**Action plan**")
+    st.dataframe(pd.DataFrame(result["action_plan"]), width="stretch")
+
+    mem = result["relationship_memory"]
+    st.markdown("**Episodic memory**")
+    st.markdown(f"_{mem['response']}_")
     if mem["memories"]:
         st.dataframe(pd.DataFrame(mem["memories"]), width="stretch")
-    else:
-        st.write("No prior episodic memories found for this applicant.")
 
     with st.expander("Raw JSON output"):
-        st.code(json.dumps(output, indent=2, default=str), language="json")
+        st.code(json.dumps(result, indent=2, default=str), language="json")
 
 if __name__ == "__main__":
     main()

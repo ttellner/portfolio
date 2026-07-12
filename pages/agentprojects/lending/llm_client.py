@@ -129,6 +129,8 @@ def detect_lending_intent(prompt: str) -> str:
 class LendingLLM(Protocol):
     provider: str
 
+    def interpret_request(self, prompt: str) -> dict: ...
+
     def generate(self, prompt: str, **kwargs) -> MockResponse: ...
 
 
@@ -146,7 +148,7 @@ class OllamaLLM:
         self._fallback = fallback or MockLLM()
         self.provider = "ollama"
 
-    def generate(self, prompt: str, **kwargs) -> MockResponse:
+    def interpret_request(self, prompt: str) -> dict:
         try:
             from openai import OpenAI
 
@@ -157,27 +159,69 @@ class OllamaLLM:
                     {
                         "role": "system",
                         "content": (
-                            "You are a lending underwriting assistant. Respond in 2-4 concise "
-                            "sentences with a clear recommendation (approve, decline, manual "
-                            "review, or fraud escalation)."
+                            "Classify the customer loan request. Reply with exactly one label: "
+                            "debt_consolidation, auto_loan, or home_improvement."
                         ),
                     },
                     {"role": "user", "content": prompt},
                 ],
-                max_tokens=kwargs.get("max_tokens", 512),
+                max_tokens=32,
+                temperature=0.0,
+            )
+            label = (response.choices[0].message.content or "").strip().lower()
+            for product in ("debt_consolidation", "auto_loan", "home_improvement"):
+                if product in label.replace(" ", "_").replace("-", "_"):
+                    return {
+                        "loan_product": product,
+                        "confidence": 0.9,
+                        "reason": f"Ollama classified request as {product}.",
+                        "requested_amount": self._fallback.interpret_request(prompt).get(
+                            "requested_amount"
+                        ),
+                    }
+        except Exception:
+            pass
+        return self._fallback.interpret_request(prompt)
+
+    def generate(self, prompt: str, **kwargs) -> MockResponse:
+        loan_product = kwargs.get("loan_product")
+        decision = kwargs.get("decision")
+        if decision == "recall":
+            return self._fallback.generate(prompt, **kwargs)
+
+        try:
+            from openai import OpenAI
+
+            client = OpenAI(base_url=f"{self.base_url}/v1", api_key="ollama")
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a lending assistant for Maria Chen at Portfolio Bank. "
+                            "Respond in 2-4 concise sentences explaining the underwriting "
+                            f"outcome for a {loan_product} request with decision={decision}."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=kwargs.get("max_tokens", 256),
                 temperature=kwargs.get("temperature", 0.2),
             )
             content = response.choices[0].message.content or ""
-            intent = detect_lending_intent(f"{prompt}\n{content}")
             return MockResponse(
                 content=content.strip(),
-                intent=intent,
+                intent=f"{loan_product}_{decision}",
                 confidence=0.9,
-                strategy="full_autonomous_resolution",
-                required_tools=[],
-                escalation_risk=0.15 if intent == "fraud_alert" else 0.1,
+                strategy="product_specific_underwriting",
                 reasoning_steps=["Live Ollama inference", f"Model: {self.model}"],
-                metadata={"provider": "ollama", "model": self.model, "host": self.base_url},
+                metadata={
+                    "provider": "ollama",
+                    "model": self.model,
+                    "loan_product": loan_product,
+                    "decision": decision,
+                },
             )
         except Exception:
             fallback = self._fallback.generate(prompt, **kwargs)

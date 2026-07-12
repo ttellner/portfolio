@@ -1,7 +1,8 @@
-"""Mock LLM responses for lending agent scenarios."""
+"""Mock LLM: loan-product interpretation and underwriting narration."""
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -17,70 +18,148 @@ class MockResponse:
     metadata: dict = field(default_factory=dict)
 
 
-_SCENARIOS: dict[str, MockResponse] = {
-    "fraud_alert": MockResponse(
-        content="High fraud risk detected. Escalate to fraud operations and freeze application.",
-        intent="fraud_alert",
-        confidence=0.94,
-        strategy="immediate_escalation",
-        required_tools=["check_fraud_signals", "freeze_application", "notify_fraud_ops"],
-        escalation_risk=0.9,
-        reasoning_steps=["Fraud score above threshold", "Velocity and device flags present"],
-    ),
-    "credit_decline": MockResponse(
-        content="Application exceeds risk appetite. Decline with adverse action notice.",
-        intent="credit_decline",
-        confidence=0.88,
-        strategy="reject_with_explanation",
-        required_tools=["pull_credit_bureau", "score_default_risk"],
-        escalation_risk=0.2,
-        reasoning_steps=["PD above policy", "Weak payment history"],
-    ),
-    "credit_approve": MockResponse(
-        content="Applicant meets policy. Approve with standard pricing and cross-sell review.",
-        intent="credit_approve",
-        confidence=0.92,
-        strategy="full_autonomous_resolution",
-        required_tools=["pull_credit_bureau", "score_default_risk", "calculate_dti"],
-        escalation_risk=0.1,
-        reasoning_steps=["Low PD", "DTI within policy", "Clean fraud screen"],
-    ),
-    "manual_review": MockResponse(
-        content="Borderline profile. Route to analyst queue with guided verification checklist.",
-        intent="manual_review",
-        confidence=0.8,
-        strategy="guided_autonomous_resolution",
-        required_tools=["verify_identity", "pull_credit_bureau"],
-        escalation_risk=0.45,
-        reasoning_steps=["Mixed signals on income and utilization"],
-    ),
+_LOAN_PRODUCT_KW: dict[str, list[str]] = {
+    "debt_consolidation": [
+        "debt",
+        "consolidat",
+        "pay off",
+        "credit card",
+        "combine",
+    ],
+    "auto_loan": [
+        "auto",
+        "car",
+        "vehicle",
+        "truck",
+        "suv",
+    ],
+    "home_improvement": [
+        "home",
+        "improvement",
+        "renovation",
+        "remodel",
+        "heloc",
+        "equity",
+        "kitchen",
+        "bathroom",
+    ],
 }
+
+_NARRATION: dict[str, dict[str, str]] = {
+    "debt_consolidation": {
+        "approved": (
+            "Debt consolidation fits your profile. Unsecured balances can be rolled into "
+            "one payment within policy DTI and your savings cushion supports the request."
+        ),
+        "declined": (
+            "Debt consolidation is not recommended right now. Unsecured balances are high "
+            "relative to savings or the projected payment exceeds policy DTI."
+        ),
+        "manual_review": (
+            "Debt consolidation needs analyst review. Balances and savings are borderline "
+            "for the proposed consolidation amount."
+        ),
+    },
+    "auto_loan": {
+        "approved": (
+            "Auto loan pre-qualification is favorable. Verified direct deposits support "
+            "the maximum monthly payment shown below."
+        ),
+        "declined": (
+            "Auto financing is not available at this payment level. Direct-deposit income "
+            "does not support an additional car payment within bank policy."
+        ),
+        "manual_review": (
+            "Auto loan request needs review. Deposit income supports a modest payment but "
+            "is below the preferred auto threshold."
+        ),
+    },
+    "home_improvement": {
+        "approved": (
+            "Home improvement equity line is available. Property value, mortgage balance, "
+            "and equity support a secured line for renovations."
+        ),
+        "declined": (
+            "Home improvement line cannot be offered. Available equity or credit profile "
+            "does not meet secured-line policy."
+        ),
+        "manual_review": (
+            "Home improvement request needs review. Equity is present but the approved "
+            "line amount is below the preferred renovation threshold."
+        ),
+    },
+}
+
+
+def interpret_loan_product(prompt: str) -> dict:
+    """Classify natural-language request into a loan product."""
+    text = prompt.lower()
+    scores: dict[str, int] = {}
+    for product, keywords in _LOAN_PRODUCT_KW.items():
+        scores[product] = sum(1 for kw in keywords if kw in text)
+
+    best = max(scores, key=scores.get)
+    if scores[best] == 0:
+        return {
+            "loan_product": "unknown",
+            "confidence": 0.0,
+            "reason": "Could not match debt consolidation, auto loan, or home improvement.",
+        }
+
+    confidence = min(0.95, 0.55 + scores[best] * 0.15)
+    return {
+        "loan_product": best,
+        "confidence": round(confidence, 2),
+        "reason": f"Matched {scores[best]} keyword(s) for {best.replace('_', ' ')}.",
+    }
+
+
+def _extract_amount(prompt: str) -> int | None:
+    match = re.search(r"\$?\s*([\d,]+)\s*k?\b", prompt.lower())
+    if not match:
+        return None
+    raw = match.group(1).replace(",", "")
+    amount = int(raw)
+    if "k" in prompt.lower()[match.end() - 2 : match.end() + 1]:
+        amount *= 1000
+    return amount
 
 
 class MockLLM:
     def __init__(self) -> None:
         self.provider = "mock"
 
-    def _route(self, prompt: str) -> str:
-        text = prompt.lower()
-        if any(k in text for k in ("fraud", "tor", "velocity", "mismatch")):
-            return "fraud_alert"
-        if any(k in text for k in ("decline", "reject", "high risk", "charge-off")):
-            return "credit_decline"
-        if any(k in text for k in ("approve", "premium", "strong", "low risk")):
-            return "credit_approve"
-        return "manual_review"
+    def interpret_request(self, prompt: str) -> dict:
+        result = interpret_loan_product(prompt)
+        result["requested_amount"] = _extract_amount(prompt)
+        return result
 
     def generate(self, prompt: str, **kwargs) -> MockResponse:
-        scenario = self._route(prompt)
-        template = _SCENARIOS[scenario]
+        if kwargs.get("decision") == "recall":
+            return MockResponse(
+                content=(
+                    "Reviewed prior lending interactions at the bank to inform this request."
+                ),
+                intent="memory_recall",
+                confidence=0.8,
+                strategy="episodic_memory",
+                metadata={"provider": "mock"},
+            )
+
+        loan_product = kwargs.get("loan_product", "unknown")
+        decision = kwargs.get("decision", "manual_review")
+        narration = _NARRATION.get(loan_product, {}).get(
+            decision,
+            "Request received. Additional review is required.",
+        )
         return MockResponse(
-            content=template.content,
-            intent=template.intent,
-            confidence=template.confidence,
-            strategy=template.strategy,
-            required_tools=list(template.required_tools),
-            escalation_risk=template.escalation_risk,
-            reasoning_steps=list(template.reasoning_steps),
-            metadata={"scenario": scenario, "provider": "mock"},
+            content=narration,
+            intent=f"{loan_product}_{decision}",
+            confidence=0.85,
+            strategy="product_specific_underwriting",
+            reasoning_steps=[
+                f"Loan product: {loan_product}",
+                f"Decision: {decision}",
+            ],
+            metadata={"loan_product": loan_product, "decision": decision, "provider": "mock"},
         )
