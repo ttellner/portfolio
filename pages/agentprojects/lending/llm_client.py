@@ -16,6 +16,42 @@ def _ollama_host() -> str:
     return os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 
 
+def _proxy_handler() -> urllib.request.BaseHandler | None:
+    """Optional Tailscale HTTP proxy for remote Ollama only (not global env)."""
+    proxy_url = os.getenv("TS_HTTP_PROXY", "").strip()
+    if not proxy_url:
+        return None
+    return urllib.request.ProxyHandler({"http": proxy_url, "https": proxy_url})
+
+
+def _urlopen(url: str, timeout: float = 3):
+    handler = _proxy_handler()
+    if handler is None:
+        return urllib.request.urlopen(url, timeout=timeout)
+    opener = urllib.request.build_opener(handler)
+    return opener.open(url, timeout=timeout)
+
+
+def _openai_client(base_url: str):
+    """Build OpenAI client for Ollama, optionally via Tailscale HTTP proxy."""
+    from openai import OpenAI
+
+    proxy_url = os.getenv("TS_HTTP_PROXY", "").strip()
+    if not proxy_url:
+        return OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
+    try:
+        import httpx
+
+        http_client = httpx.Client(proxy=proxy_url, timeout=30.0)
+        return OpenAI(
+            base_url=f"{base_url}/v1",
+            api_key="ollama",
+            http_client=http_client,
+        )
+    except Exception:
+        return OpenAI(base_url=f"{base_url}/v1", api_key="ollama")
+
+
 def _ollama_model() -> str:
     return os.getenv("OLLAMA_MODEL", "deepseek-v2:16b")
 
@@ -101,7 +137,7 @@ def is_ollama_available(base_url: str | None = None) -> bool:
     """Return True when an Ollama server responds at base_url."""
     base_url = (base_url or _ollama_host()).rstrip("/")
     try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=3) as response:
+        with _urlopen(f"{base_url}/api/tags", timeout=3) as response:
             return response.status == 200
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
         return False
@@ -111,7 +147,7 @@ def list_ollama_models(base_url: str | None = None) -> list[str]:
     """Return installed Ollama model names, or an empty list."""
     base_url = (base_url or _ollama_host()).rstrip("/")
     try:
-        with urllib.request.urlopen(f"{base_url}/api/tags", timeout=5) as response:
+        with _urlopen(f"{base_url}/api/tags", timeout=5) as response:
             payload = json.loads(response.read().decode("utf-8"))
         return [item.get("name", "") for item in payload.get("models", []) if item.get("name")]
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, json.JSONDecodeError):
@@ -150,9 +186,7 @@ class OllamaLLM:
 
     def interpret_request(self, prompt: str) -> dict:
         try:
-            from openai import OpenAI
-
-            client = OpenAI(base_url=f"{self.base_url}/v1", api_key="ollama")
+            client = _openai_client(self.base_url)
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[
@@ -190,8 +224,6 @@ class OllamaLLM:
             return self._fallback.generate(prompt, **kwargs)
 
         try:
-            from openai import OpenAI
-
             if loan_product == "close_planning":
                 system_content = (
                     "You are a close-schedule planner for Maria Chen at Portfolio Bank. "
@@ -205,7 +237,7 @@ class OllamaLLM:
                     f"outcome for a {loan_product} request with decision={decision}."
                 )
 
-            client = OpenAI(base_url=f"{self.base_url}/v1", api_key="ollama")
+            client = _openai_client(self.base_url)
             response = client.chat.completions.create(
                 model=self.model,
                 messages=[

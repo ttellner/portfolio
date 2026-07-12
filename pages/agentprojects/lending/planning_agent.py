@@ -5,7 +5,6 @@ from __future__ import annotations
 import random
 from datetime import datetime
 
-from .fallout import fallout_shelter
 from .llm_client import LendingLLM, get_llm_client
 from .mock_tools import (
     evaluate_home_improvement,
@@ -37,19 +36,29 @@ def _draw_actual_days(
     return planned, "on_time"
 
 
-@fallout_shelter(fallback_value={"decision": "manual_review"})
 def gather_underwriting_snapshot() -> dict:
     """Pull Maria Chen bank and credit data; confirm home improvement capacity."""
-    analysis = evaluate_home_improvement()
-    return {
-        "customer": get_customer(),
-        "balances": get_balances(),
-        "direct_deposits": get_direct_deposits(),
-        "mortgage": get_mortgage(),
-        "credit_bureau": pull_credit_bureau(),
-        "analysis": analysis,
-        "decision": analysis.get("decision", "manual_review"),
-    }
+    try:
+        analysis = evaluate_home_improvement()
+        return {
+            "customer": get_customer(),
+            "balances": get_balances(),
+            "direct_deposits": get_direct_deposits(),
+            "mortgage": get_mortgage(),
+            "credit_bureau": pull_credit_bureau(),
+            "analysis": analysis,
+            "decision": analysis.get("decision", "manual_review"),
+        }
+    except Exception as exc:
+        return {
+            "customer": get_customer(),
+            "balances": {},
+            "direct_deposits": {"monthly_income": 0, "deposits": []},
+            "mortgage": {},
+            "credit_bureau": {},
+            "analysis": {"decision": "manual_review", "error": str(exc)},
+            "decision": "manual_review",
+        }
 
 
 def assemble_origination_pipeline() -> list[dict]:

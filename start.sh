@@ -35,14 +35,10 @@ if [ -n "${TS_AUTHKEY:-}" ]; then
         --hostname="${TS_HOSTNAME:-railway-portfolio}" \
         --accept-dns=false \
         --accept-routes; then
-        export HTTP_PROXY="http://127.0.0.1:1056"
-        export HTTPS_PROXY="http://127.0.0.1:1056"
-        export ALL_PROXY="socks5://127.0.0.1:1055"
-        export http_proxy="${HTTP_PROXY}"
-        export https_proxy="${HTTPS_PROXY}"
-        export all_proxy="${ALL_PROXY}"
-        export NO_PROXY="localhost,127.0.0.1,::1"
-        export no_proxy="${NO_PROXY}"
+        # Do NOT export HTTP(S)_PROXY globally — that can break Streamlit/nginx
+        # local traffic. Ollama clients read TS_HTTP_PROXY explicitly.
+        export TS_HTTP_PROXY="http://127.0.0.1:1056"
+        export TS_ALL_PROXY="socks5://127.0.0.1:1055"
         echo "Tailscale is up: $(tailscale ip -4 2>/dev/null || echo 'ip pending')"
     else
         echo "WARNING: Tailscale up failed; continuing in simulation mode."

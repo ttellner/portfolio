@@ -5,10 +5,11 @@ https://via.placeholder.com/400x200?text=Close+Planning+Agent
 """
 
 from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
-import pandas as pd
+
 import streamlit as st
 
 CURRENT_DIR = Path(__file__).parent.absolute()
@@ -16,8 +17,7 @@ CURRENT_DIR = Path(__file__).parent.absolute()
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from lending.display import render_stat_cards
-from lending.planning_agent import CUSTOMER_PROMPT, TARGET_CLOSE_DAYS, CloseSchedulePlanner
+from lending.display import render_stat_cards, render_table
 from lending.llm_client import (
     DEFAULT_OLLAMA_MODEL,
     get_llm_client,
@@ -25,9 +25,12 @@ from lending.llm_client import (
     verify_ollama_invite_password,
 )
 from lending.mock_databases import CUSTOMER
+from lending.planning_agent import CUSTOMER_PROMPT, TARGET_CLOSE_DAYS, CloseSchedulePlanner
+
 
 def _invite_unlocked() -> bool:
     return bool(st.session_state.get("ollama_invite_unlocked", False))
+
 
 def _handle_invite_password(password: str) -> None:
     if not password:
@@ -37,6 +40,88 @@ def _handle_invite_password(password: str) -> None:
         st.session_state.ollama_invite_unlocked = True
     else:
         st.session_state.ollama_invite_unlocked = False
+
+
+def _balance_summary(balances: dict) -> dict:
+    return {
+        "checking": balances.get("checking", 0),
+        "savings": balances.get("savings", 0),
+        "total_unsecured_debt": balances.get("total_unsecured_debt", 0),
+        "credit_card_count": len(balances.get("credit_cards") or []),
+        "personal_loan_balance": (balances.get("personal_loan") or {}).get("balance", 0),
+    }
+
+
+def _render_results(result: dict) -> None:
+    if result.get("status") == "declined":
+        st.error(result.get("llm_summary", "Request declined."))
+        with st.expander("Raw JSON output"):
+            st.code(json.dumps(result, indent=2, default=str), language="json")
+        return
+
+    sim = result["simulation"]
+    planned = result["planned_schedule"]
+    uw = result["underwriting"]
+    analysis = uw.get("analysis") or {}
+
+    st.subheader("Credit & capacity check")
+    render_stat_cards(
+        [
+            ("Decision", str(uw.get("decision", "n/a"))),
+            ("FICO", str(analysis.get("fico_score", "n/a"))),
+            ("Equity line", f"${analysis.get('equity_line_amount', 0):,}"),
+            ("Risk factor", f"{analysis.get('risk_factor', 0):.0%}"),
+        ]
+    )
+
+    st.subheader("Close schedule")
+    render_stat_cards(
+        [
+            ("Target close (day)", str(TARGET_CLOSE_DAYS)),
+            ("Projected close (day)", str(sim.get("projected_close_day", "n/a"))),
+            ("On track", "Yes" if sim.get("on_track") else "No — rescheduled"),
+        ]
+    )
+
+    st.markdown(f"**Planner summary:** {result.get('llm_summary', '')}")
+
+    st.markdown("**Planned pipeline (baseline)**")
+    render_table(
+        result.get("pipeline") or [],
+        caption=(
+            f"Baseline planned close: day {planned.get('projected_close_day')} "
+            f"(target day {planned.get('target_close_day')})"
+        ),
+    )
+
+    st.markdown("**Simulated actual durations**")
+    render_table([sim.get("actual_durations") or {}])
+
+    st.markdown("**Monitor log (progress over time)**")
+    render_table(result.get("monitor_log") or [])
+
+    revisions = sim.get("revisions") or []
+    if revisions:
+        st.markdown("**Reschedule events**")
+        render_table(revisions)
+    else:
+        st.success("No rescheduling required — 20-day close target held.")
+
+    st.markdown("**Bank data used**")
+    bank_cols = st.columns(3)
+    with bank_cols[0]:
+        st.caption("Balances")
+        render_table(_balance_summary(uw.get("balances") or {}))
+    with bank_cols[1]:
+        st.caption("Direct deposits")
+        render_table((uw.get("direct_deposits") or {}).get("deposits") or [])
+    with bank_cols[2]:
+        st.caption("Mortgage / bureau")
+        render_table([{**(uw.get("mortgage") or {}), **(uw.get("credit_bureau") or {})}])
+
+    with st.expander("Raw JSON output"):
+        st.code(json.dumps(result, indent=2, default=str), language="json")
+
 
 def main() -> None:
     st.markdown(
@@ -112,79 +197,33 @@ def main() -> None:
             """
         )
 
-    if not run_btn:
+    if run_btn:
+        invite_unlocked = _invite_unlocked()
+        with st.spinner("Running close planning simulation..."):
+            try:
+                llm = get_llm_client(
+                    invite_unlocked=invite_unlocked,
+                    model=selected_model if live_ollama else None,
+                )
+                st.session_state["close_plan_result"] = (
+                    CloseSchedulePlanner(llm).orchestrate_close_plan()
+                )
+                st.session_state["close_plan_error"] = None
+            except Exception as exc:
+                st.session_state["close_plan_result"] = None
+                st.session_state["close_plan_error"] = str(exc)
+
+    if st.session_state.get("close_plan_error"):
+        st.error(f"Simulation failed: {st.session_state['close_plan_error']}")
+        return
+
+    result = st.session_state.get("close_plan_result")
+    if not result:
         st.info("Click **Run close planning simulation** to execute a monitored close plan.")
         return
 
-    invite_unlocked = _invite_unlocked()
-    with st.spinner("Running close planning simulation..."):
-        llm = get_llm_client(
-            invite_unlocked=invite_unlocked,
-            model=selected_model if live_ollama else None,
-        )
-        result = CloseSchedulePlanner(llm).orchestrate_close_plan()
+    _render_results(result)
 
-    if result.get("status") == "declined":
-        st.error(result["llm_summary"])
-        with st.expander("Raw JSON output"):
-            st.code(json.dumps(result, indent=2, default=str), language="json")
-        return
-
-    sim = result["simulation"]
-    planned = result["planned_schedule"]
-    uw = result["underwriting"]
-
-    st.subheader("Credit & capacity check")
-    analysis = uw["analysis"]
-    render_stat_cards([
-        ("Decision", uw["decision"]),
-        ("FICO", str(analysis.get("fico_score", "n/a"))),
-        ("Equity line", f"${analysis.get('equity_line_amount', 0):,}"),
-        ("Risk factor", f"{analysis.get('risk_factor', 0):.0%}"),
-    ])
-
-    st.subheader("Close schedule")
-    render_stat_cards([
-        ("Target close (day)", str(TARGET_CLOSE_DAYS)),
-        ("Projected close (day)", str(sim["projected_close_day"])),
-        ("On track", "Yes" if sim["on_track"] else "No — rescheduled"),
-    ])
-
-    st.markdown(f"**Planner summary:** {result['llm_summary']}")
-
-    st.markdown("**Planned pipeline (baseline)**")
-    st.dataframe(pd.DataFrame(result["pipeline"]), use_container_width=True)
-    st.caption(
-        f"Baseline planned close: day {planned['projected_close_day']} "
-        f"(target day {planned['target_close_day']})"
-    )
-
-    st.markdown("**Simulated actual durations**")
-    st.dataframe(pd.DataFrame([sim["actual_durations"]]), use_container_width=True)
-
-    st.markdown("**Monitor log (progress over time)**")
-    st.dataframe(pd.DataFrame(result["monitor_log"]), use_container_width=True)
-
-    if sim["revisions"]:
-        st.markdown("**Reschedule events**")
-        st.dataframe(pd.DataFrame(sim["revisions"]), use_container_width=True)
-    else:
-        st.success("No rescheduling required — 20-day close target held.")
-
-    st.markdown("**Bank data used**")
-    bank_cols = st.columns(3)
-    with bank_cols[0]:
-        st.dataframe(pd.DataFrame([uw["balances"]]), use_container_width=True)
-    with bank_cols[1]:
-        st.dataframe(pd.DataFrame(uw["direct_deposits"]["deposits"]), use_container_width=True)
-    with bank_cols[2]:
-        st.dataframe(
-            pd.DataFrame([{**uw["mortgage"], **uw["credit_bureau"]}]),
-            use_container_width=True,
-        )
-
-    with st.expander("Raw JSON output"):
-        st.code(json.dumps(result, indent=2, default=str), language="json")
 
 if __name__ == "__main__":
     main()
