@@ -1,4 +1,4 @@
-"""Graceful fallback decorator for agent tool calls (fallout handling)."""
+"""Graceful fallback decorator for agent tool calls."""
 
 import functools
 import time

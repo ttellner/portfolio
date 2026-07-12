@@ -1,4 +1,4 @@
-"""This agent lending architecture depicts cognitive patterns - the simplest of architectures one would normally find in practice."""
+"""Single-agent lending architecture with perceive, reason, plan, remember, and narrate."""
 
 from __future__ import annotations
 
@@ -6,7 +6,6 @@ from datetime import datetime
 
 from .mock_databases import MockVectorDB
 from .llm_client import LendingLLM, get_llm_client
-from .mock_llm import MockLLM, MockResponse
 from .fallout import coalesce
 from .mock_tools import (
     calculate_dti,
@@ -110,17 +109,55 @@ def build_action_plan(decision: str) -> list[dict]:
     ]
 
 
-class UnderwritingAgent:
-    """Autonomous decision-making agent."""
+def build_origination_plan(application_id: str) -> list[dict]:
+    """Origination DAG template (KYC through cross-sell)."""
+    return [
+        {"phase": 1, "id": "G-T1", "action": "verify_identity", "depends_on": []},
+        {"phase": 2, "id": "G-T2", "action": "pull_credit_bureau", "depends_on": ["G-T1"]},
+        {"phase": 3, "id": "G-T3", "action": "score_default_risk", "depends_on": ["G-T2"]},
+        {"phase": 4, "id": "G-T4", "action": "calculate_dti", "depends_on": ["G-T2"]},
+        {"phase": 5, "id": "G-T5", "action": "credit_decision", "depends_on": ["G-T3", "G-T4"]},
+        {"phase": 6, "id": "G-T6", "action": "cross_sell_recommendation", "depends_on": ["G-T5"]},
+    ]
 
-    def __init__(self, llm: LendingLLM | None = None) -> None:
+
+def recall_and_respond(
+    vector_db: MockVectorDB,
+    llm: LendingLLM,
+    applicant_id: str,
+    applicant_name: str,
+) -> dict:
+    """Search episodic memory and narrate relationship context."""
+    query = f"What is the lending history and next best offer for {applicant_name}?"
+    memories = vector_db.search(applicant_id, query, top_k=3)
+    llm_response = llm.generate(
+        f"Applicant {applicant_id} asks: {query}. Memories: {memories}"
+    )
+    vector_db.add(applicant_id, query, llm_response.content[:120])
+    return {
+        "memories": memories,
+        "response": llm_response.content,
+        "intent": llm_response.intent,
+    }
+
+
+class UnderwritingAgent:
+    """Single underwriting agent: perceive, reason, plan, remember, narrate."""
+
+    def __init__(
+        self,
+        llm: LendingLLM | None = None,
+        vector_db: MockVectorDB | None = None,
+    ) -> None:
         self.llm = llm or get_llm_client()
+        self.vector_db = vector_db or MockVectorDB()
         self.decision_history: list[dict] = []
 
     def cognitive_loop(self, application_id: str) -> dict:
         perception = build_perception(application_id)
         reasoning = select_strategy(perception)
-        plan = build_action_plan(reasoning["decision"])
+        action_plan = build_action_plan(reasoning["decision"])
+        origination_plan = build_origination_plan(application_id)
 
         prompt = (
             f"Underwrite application {application_id} for {perception['name']}. "
@@ -128,6 +165,13 @@ class UnderwritingAgent:
             f"FICO={perception['fico_score']}, decision={reasoning['decision']}"
         )
         llm_response = self.llm.generate(prompt)
+
+        relationship_memory = recall_and_respond(
+            self.vector_db,
+            self.llm,
+            perception["applicant_id"],
+            perception["name"],
+        )
 
         bureau = pull_credit_bureau(perception["applicant_id"])
         offers = recommend_products(
@@ -140,84 +184,13 @@ class UnderwritingAgent:
         result = {
             "perception": perception,
             "reasoning": reasoning,
-            "action_plan": plan,
+            "action_plan": action_plan,
+            "origination_plan": origination_plan,
+            "relationship_memory": relationship_memory,
             "llm_summary": llm_response.content,
             "llm_intent": llm_response.intent,
             "cross_sell_offers": offers.get("offers", []),
-            "tasks_completed": [step["action"] for step in plan],
+            "tasks_completed": [step["action"] for step in action_plan],
         }
         self.decision_history.append(result)
         return result
-
-
-class PlanningAgent:
-    """Planning agent that materializes origination DAG steps."""
-
-    def __init__(self, llm: LendingLLM | None = None) -> None:
-        self.llm = llm or get_llm_client()
-
-    def decompose_origination(self, application_id: str) -> list[dict]:
-        app = get_application(application_id)
-        goal = (
-            f"Originate {app['purpose']} loan for {app['name']} amount "
-            f"{app['requested_amount']}"
-        )
-        self.llm.generate(goal)
-        return [
-            {"phase": 1, "id": "G-T1", "action": "verify_identity", "depends_on": []},
-            {"phase": 2, "id": "G-T2", "action": "pull_credit_bureau", "depends_on": ["G-T1"]},
-            {"phase": 3, "id": "G-T3", "action": "score_default_risk", "depends_on": ["G-T2"]},
-            {"phase": 4, "id": "G-T4", "action": "calculate_dti", "depends_on": ["G-T2"]},
-            {"phase": 5, "id": "G-T5", "action": "credit_decision", "depends_on": ["G-T3", "G-T4"]},
-            {"phase": 6, "id": "G-T6", "action": "cross_sell_recommendation", "depends_on": ["G-T5"]},
-        ]
-
-
-class RelationshipAgent:
-    """Memory-augmented agent for episodic applicant context."""
-
-    def __init__(
-        self,
-        vector_db: MockVectorDB | None = None,
-        llm: LendingLLM | None = None,
-    ) -> None:
-        self.vector_db = vector_db or MockVectorDB()
-        self.llm = llm or get_llm_client()
-
-    def handle_interaction(self, applicant_id: str, query: str) -> dict:
-        memories = self.vector_db.search(applicant_id, query, top_k=3)
-        llm_response = self.llm.generate(
-            f"Applicant {applicant_id} asks: {query}. Memories: {memories}"
-        )
-        self.vector_db.add(applicant_id, query, llm_response.content[:120])
-        return {
-            "memories": memories,
-            "response": llm_response.content,
-            "intent": llm_response.intent,
-        }
-
-
-def run_integrated_demo(
-    application_id: str,
-    llm: LendingLLM | None = None,
-    invite_unlocked: bool = False,
-    model: str | None = None,
-) -> dict:
-    llm = llm or get_llm_client(invite_unlocked=invite_unlocked, model=model)
-    underwriter = UnderwritingAgent(llm)
-    planner = PlanningAgent(llm)
-    relationship = RelationshipAgent(llm=llm)
-
-    underwriting = underwriter.cognitive_loop(application_id)
-    origination_plan = planner.decompose_origination(application_id)
-    app = get_application(application_id)
-    memory = relationship.handle_interaction(
-        app["applicant_id"],
-        f"What is the lending history and next best offer for {app['name']}?",
-    )
-
-    return {
-        "underwriting": underwriting,
-        "origination_plan": origination_plan,
-        "relationship_memory": memory,
-    }

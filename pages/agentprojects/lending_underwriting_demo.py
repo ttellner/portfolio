@@ -1,7 +1,7 @@
 """
 Lending Underwriting Agent Demo
-Interactive fraud, creditworthiness, default-risk, and cross-sell agent workflow.
-https://via.placeholder.com/400x200?text=AI+Lending+Agents
+Single-agent fraud, creditworthiness, default-risk, and cross-sell workflow.
+https://via.placeholder.com/400x200?text=AI+Lending+Agent
 """
 
 from __future__ import annotations
@@ -16,14 +16,13 @@ CURRENT_DIR = Path(__file__).parent.absolute()
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-from lending.agents import PlanningAgent, RelationshipAgent, UnderwritingAgent, run_integrated_demo
+from lending.agents import UnderwritingAgent
 from lending.llm_client import (
     DEFAULT_OLLAMA_MODEL,
     get_llm_client,
     get_llm_status,
     verify_ollama_invite_password,
 )
-from lending.mock_databases import APPLICATIONS
 
 APPLICATION_LABELS = {
     "app_1001": "Maria Chen — debt consolidation ($25k)",
@@ -52,10 +51,8 @@ def main() -> None:
     st.markdown(
         """
         <div style="max-width:900px;margin:0 auto;text-align:justify;">
-        Portfolio demo built simple cognitive agents architecture:
-        <b>Underwriting</b> (autonomous decision loop),
-        <b>Planning</b> (origination DAG), and
-        <b>Relationship</b> (memory + cross-sell).
+        Single-agent portfolio demo with a simple cognitive loop:
+        <b>perceive</b> → <b>reason</b> → <b>plan</b> → <b>remember</b> → <b>narrate</b>.
         The public demo runs in <b>simulation mode</b>. Invite-only access unlocks
         live Ollama via a configured remote <code>OLLAMA_HOST</code>.
         </div>
@@ -83,7 +80,7 @@ def main() -> None:
             st.caption(status["hint"])
 
     col1, col2 = st.columns([1, 2])
-    
+
     with col1:
         live_ollama = _invite_unlocked() and status["mode"] == "LIVE"
         model_options = status["available_models"] or [DEFAULT_OLLAMA_MODEL]
@@ -100,26 +97,22 @@ def main() -> None:
             format_func=lambda x: APPLICATION_LABELS[x],
         )
 
-        run_mode = st.radio(
-            "Run mode",
-            ["Integrated demo (all 3 agents)", "Underwriting only", "Planning only", "Memory only"],
-        )
         run_btn = st.button("Run agent workflow", type="primary", use_container_width=True)
 
     with col2:
         st.subheader("Architecture")
         st.markdown(
             """
-            1. **Perception** — Gathers bureau, fraud, default risk, DTI, identity, and sanctions data into a snapshot 
-            2. **Cognition** — Convert into approve/decline/review/fraud decisions, action plans, and cross-sell offers
-            3. **Planning** — Builds the origination DAG (KYC → bureau → score → DTI → decision → cross-sell).
-            4. **Memory** — Searches episodic memories, queries the LLM with context, and stores new interactions. 
-            
-            This is best described as a hybrid demo — a traditional underwriting rules engine dressed in an agentic cognitive architecture. 
-            It illustrates perception, cognition, planning, and memory, but the actual control logic is still largely deterministic and 
-            bank-like rather than open-ended agent autonomy. 
-            
-            The LLM sits on top as a commentary and interaction layer, similar to putting GPT on top of a bank's existing decision engine.
+            One **UnderwritingAgent** runs the full loop:
+
+            1. **Perceive** — bureau, fraud, default risk, DTI, identity, sanctions
+            2. **Reason** — rules-based approve / decline / review / fraud escalation
+            3. **Plan** — decision action plan and origination DAG
+            4. **Remember** — episodic memory search and recall
+            5. **Narrate** — LLM summary of the underwriting outcome
+
+            This is a hybrid demo: deterministic bank-style control logic with an LLM
+            commentary layer on top, not open-ended agent autonomy.
             """
         )
 
@@ -128,81 +121,60 @@ def main() -> None:
         return
 
     invite_unlocked = _invite_unlocked()
-    with st.spinner("Running agent pipeline..."):
+    with st.spinner("Running agent workflow..."):
         llm = get_llm_client(invite_unlocked=invite_unlocked, model=selected_model)
-        if run_mode == "Integrated demo (all 3 agents)":
-            output = run_integrated_demo(
-                app_id,
-                llm=llm,
-                invite_unlocked=invite_unlocked,
-                model=selected_model,
-            )
-        elif run_mode == "Underwriting only":
-            output = {"underwriting": UnderwritingAgent(llm).cognitive_loop(app_id)}
-        elif run_mode == "Planning only":
-            output = {"origination_plan": PlanningAgent(llm).decompose_origination(app_id)}
-        else:
-            applicant_id = APPLICATIONS[app_id]["applicant_id"]
-            output = {
-                "relationship_memory": RelationshipAgent(llm=llm).handle_interaction(
-                    applicant_id,
-                    "What products should we offer based on prior history?",
-                )
-            }
-        output["llm_backend"] = {
-            "provider": getattr(llm, "provider", "mock"),
-            "model": getattr(llm, "model", "mock"),
-            "mode": "SIMULATION" if getattr(llm, "provider", "") == "mock" else "LIVE",
-            "invite_unlocked": invite_unlocked,
+        result = UnderwritingAgent(llm).cognitive_loop(app_id)
+        output = {
+            "underwriting": result,
+            "llm_backend": {
+                "provider": getattr(llm, "provider", "mock"),
+                "model": getattr(llm, "model", "mock"),
+                "mode": "SIMULATION" if getattr(llm, "provider", "") == "mock" else "LIVE",
+                "invite_unlocked": invite_unlocked,
+            },
         }
 
-    if "underwriting" in output:
-        uw = output["underwriting"]
-        st.subheader("Underwriting agent — cognitive loop")
-        m1, m2, m3, m4 = st.columns(4)
-        p = uw["perception"]
-        r = uw["reasoning"]
-        m1.metric("FICO", p["fico_score"])
-        m2.metric("Fraud score", p["fraud_score"])
-        m3.metric("PD (12mo)", f"{p['pd_12mo']:.1%}" if p.get("pd_12mo") is not None else "n/a")
-        m4.metric("Decision", r["decision"])
+    uw = output["underwriting"]
+    st.subheader("Underwriting agent — cognitive loop")
+    m1, m2, m3, m4 = st.columns(4)
+    p = uw["perception"]
+    r = uw["reasoning"]
+    m1.metric("FICO", p["fico_score"])
+    m2.metric("Fraud score", p["fraud_score"])
+    m3.metric("PD (12mo)", f"{p['pd_12mo']:.1%}" if p.get("pd_12mo") is not None else "n/a")
+    m4.metric("Decision", r["decision"])
 
-        st.markdown(f"**Strategy:** `{r['strategy']}`")
-        st.markdown(f"**LLM summary:** {uw['llm_summary']}")
-        
-        if "llm_backend" in output:
-            backend = output["llm_backend"]
-            st.caption(
-                f"Generated via {backend['provider']} "
-                f"({backend['mode']}, model: {backend.get('model', 'n/a')})"
-            )
+    st.markdown(f"**Strategy:** `{r['strategy']}`")
+    st.markdown(f"**LLM summary:** {uw['llm_summary']}")
 
-        st.markdown("**Perception snapshot**")
-        st.dataframe(pd.DataFrame([p]), width="stretch")
-        st.markdown("**Action plan (DAG)**")
-        st.dataframe(pd.DataFrame(uw["action_plan"]), width="stretch")
+    backend = output["llm_backend"]
+    st.caption(
+        f"Generated via {backend['provider']} "
+        f"({backend['mode']}, model: {backend.get('model', 'n/a')})"
+    )
 
-        if uw["cross_sell_offers"]:
-            st.markdown("**Cross-sell offers**")
-            st.dataframe(pd.DataFrame(uw["cross_sell_offers"]), width="stretch")
-            
-    if "origination_plan" in output:
-        st.subheader("Planning agent — origination DAG")
-        st.dataframe(pd.DataFrame(output["origination_plan"]), width="stretch")
+    st.markdown("**Perception snapshot**")
+    st.dataframe(pd.DataFrame([p]), width="stretch")
+    st.markdown("**Action plan (DAG)**")
+    st.dataframe(pd.DataFrame(uw["action_plan"]), width="stretch")
 
-    if "relationship_memory" in output:
-        st.subheader("Relationship agent — episodic memory")
-        mem = output["relationship_memory"]
-        st.markdown(f"**Response:** {mem['response']}")
-        if mem["memories"]:
-            st.dataframe(pd.DataFrame(mem["memories"]), width="stretch")
-        else:
-            st.write("No prior episodic memories found for this applicant.")
+    if uw["cross_sell_offers"]:
+        st.markdown("**Cross-sell offers**")
+        st.dataframe(pd.DataFrame(uw["cross_sell_offers"]), width="stretch")
+
+    st.subheader("Origination plan")
+    st.dataframe(pd.DataFrame(uw["origination_plan"]), width="stretch")
+
+    st.subheader("Episodic memory")
+    mem = uw["relationship_memory"]
+    st.markdown(f"**Response:** {mem['response']}")
+    if mem["memories"]:
+        st.dataframe(pd.DataFrame(mem["memories"]), width="stretch")
+    else:
+        st.write("No prior episodic memories found for this applicant.")
 
     with st.expander("Raw JSON output"):
         st.code(json.dumps(output, indent=2, default=str), language="json")
 
 if __name__ == "__main__":
     main()
-
-

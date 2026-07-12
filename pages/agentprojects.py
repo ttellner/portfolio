@@ -1,6 +1,6 @@
 """
 AI Agent Engineering Projects
-Multi-agent lending demos: fraud triage, credit underwriting, default risk, and cross-sell.
+Single-agent lending demos: fraud triage, credit underwriting, default risk, and cross-sell.
 https://via.placeholder.com/400x200?text=AI+Agent+Projects
 """
 import importlib.util
