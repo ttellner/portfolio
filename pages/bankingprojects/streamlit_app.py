@@ -56,14 +56,6 @@ if _default_training_file is None:
 DEFAULT_TRAINING_FILE = _default_training_file
 DEFAULT_NEW_APPLICANT_FILE = str(current_dir / "data" / "New_Applicant_Dataset__500_Records_.csv")
 
-# Page configuration
-st.set_page_config(
-    page_title="Credit Scorecard Application",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS for better styling
 st.markdown("""
     <style>

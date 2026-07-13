@@ -25,14 +25,6 @@ from iv_woe_functions import (
     create_filtered_dataset
 )
 
-# Page configuration
-st.set_page_config(
-    page_title="PD.4 IV and WoE Analysis",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>

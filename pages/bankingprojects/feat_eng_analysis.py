@@ -25,14 +25,6 @@ from feat_eng_functions import (
     calculate_iv_by_decile
 )
 
-# Page configuration
-st.set_page_config(
-    page_title="PD.3 Feature Engineering Analysis",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>

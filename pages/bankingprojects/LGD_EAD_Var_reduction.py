@@ -16,14 +16,6 @@ current_dir = Path(__file__).parent.absolute()
 if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
-# Page configuration
-st.set_page_config(
-    page_title="LGD/EAD.1 Variable Reduction",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>

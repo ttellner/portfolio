@@ -28,14 +28,6 @@ from logreg_model_functions import (
     calculate_ks_statistic
 )
 
-# Page configuration
-st.set_page_config(
-    page_title="PD.6 Logistic Regression Model Analysis",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>

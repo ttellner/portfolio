@@ -28,14 +28,6 @@ from data_pipeline_functions import (
     stage11_final_vars
 )
 
-# Page configuration
-st.set_page_config(
-    page_title="PD.1 Data Pipeline Step-by-Step Execution",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>

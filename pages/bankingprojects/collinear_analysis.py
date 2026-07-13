@@ -27,14 +27,6 @@ from collinear_functions import (
 )
 from iv_woe_functions import create_expanded_keep_list
 
-# Page configuration
-st.set_page_config(
-    page_title="PD.5 Collinearity Analysis",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>

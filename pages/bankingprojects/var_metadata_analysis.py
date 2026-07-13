@@ -27,14 +27,6 @@ from var_meta_functions import (
     step9_orphan_records
 )
 
-# Page configuration
-st.set_page_config(
-    page_title="PD.2 Variable Metadata Analysis",
-    page_icon="",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 # Custom CSS
 st.markdown("""
     <style>
