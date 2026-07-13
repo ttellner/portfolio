@@ -6,7 +6,6 @@ Displays pre-rendered HTML from R Markdown
 import streamlit as st
 from pathlib import Path
 
-st.set_page_config(layout="wide")
 
 st.markdown("## Single-Cell Analysis Workflow - R/Seurat Analysis")
 st.markdown("#### R/Seurat Data Ingestion, QC and Prep")

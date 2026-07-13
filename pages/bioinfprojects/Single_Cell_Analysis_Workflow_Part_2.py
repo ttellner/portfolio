@@ -7,7 +7,6 @@ import json
 import os
 from pathlib import Path
 
-st.set_page_config(layout="wide", page_title="Single-Cell Analysis Part 2")
 
 st.markdown("## Single-Cell Analysis Workflow - Python/TensorFlow Analysis")
 st.markdown("#### VAE-based Dimensionality Reduction and Clustering - Code Display Only")

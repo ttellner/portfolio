@@ -2,7 +2,6 @@ import streamlit as st
 from pathlib import Path
 import sys
 
-st.set_page_config(layout="wide")
 
 # Get the directory containing this file
 base_dir = Path(__file__).parent
