@@ -22,9 +22,8 @@ altair>=4.1.0
 bokeh>=2.2.2,<=2.4.1
 pydeck>=0.6.2
 
-# Model interpretation
-shap>=0.41.0,<0.45.0
-lime>=0.2.0
+# Model interpretation (optional — see pages/bankingprojects/requirements.txt)
+# shap and lime removed from the production image; they pull heavy native deps.
 
 # Statistical analysis
 statsmodels>=0.13.0

@@ -9,8 +9,14 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-13-segfault-fix
+ARG BUILD_DATE=2026-07-13-remove-shap
 ENV BUILD_DATE=${BUILD_DATE}
+ENV PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
+ENV TF_ENABLE_ONEDNN_OPTS=0
+ENV TF_CPP_MIN_LOG_LEVEL=2
 
 # Install system dependencies (including nginx for WebSocket proxy)
 # Add system libraries needed for R graphics packages (ggplot2, isoband, etc.)
