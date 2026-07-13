@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 ENV STREAMLIT_SERVER_PORT=8501
 ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
 # Build cache buster - change this to force rebuild
-ARG BUILD_DATE=2026-07-12-decision-maker-502-fix
+ARG BUILD_DATE=2026-07-13-streamlit-monitor
 ENV BUILD_DATE=${BUILD_DATE}
 
 # Install system dependencies (including nginx for WebSocket proxy)

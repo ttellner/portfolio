@@ -3,6 +3,7 @@
 STREAMLIT_LOG=/var/log/streamlit.log
 STREAMLIT_HEALTH_URL="http://127.0.0.1:8501/_stcore/health"
 STREAMLIT_START_TIMEOUT="${STREAMLIT_START_TIMEOUT:-120}"
+STREAMLIT_MONITOR_INTERVAL="${STREAMLIT_MONITOR_INTERVAL:-15}"
 
 mkdir -p /var/log
 
@@ -48,6 +49,9 @@ else
 fi
 
 echo "Starting Streamlit..."
+: > "${STREAMLIT_LOG}"
+tail -n 0 -F "${STREAMLIT_LOG}" &
+
 streamlit run Home.py \
     --server.port=8501 \
     --server.address=127.0.0.1 \
@@ -83,5 +87,31 @@ if ! curl -sf "${STREAMLIT_HEALTH_URL}" >/dev/null 2>&1; then
     exit 1
 fi
 
+monitor_streamlit() {
+    while sleep "${STREAMLIT_MONITOR_INTERVAL}"; do
+        if ! kill -0 "${STREAMLIT_PID}" 2>/dev/null; then
+            echo "ERROR: Streamlit process ${STREAMLIT_PID} exited after startup."
+            tail -n 100 "${STREAMLIT_LOG}" || true
+            nginx -s quit 2>/dev/null || true
+            exit 1
+        fi
+        if ! curl -sf "${STREAMLIT_HEALTH_URL}" >/dev/null 2>&1; then
+            echo "ERROR: Streamlit health check failed after startup."
+            tail -n 100 "${STREAMLIT_LOG}" || true
+            nginx -s quit 2>/dev/null || true
+            exit 1
+        fi
+    done
+}
+
+monitor_streamlit &
+MONITOR_PID=$!
+
 echo "Starting nginx..."
-exec nginx -g "daemon off;"
+nginx -g "daemon off;" &
+NGINX_PID=$!
+
+wait -n "${MONITOR_PID}" "${NGINX_PID}"
+EXIT_CODE=$?
+echo "Container exiting with status ${EXIT_CODE}"
+exit "${EXIT_CODE}"
