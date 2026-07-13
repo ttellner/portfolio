@@ -3,31 +3,55 @@ Model Training and Scoring Module
 Flexible model interface for different model types.
 """
 
+# Suppress TensorFlow oneDNN messages when CNN model is used.
+import os
+import warnings
+
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+
+warnings.filterwarnings("ignore")
+
 import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.tree import DecisionTreeClassifier
-import warnings
-import os
-warnings.filterwarnings('ignore')
 
-# Suppress TensorFlow oneDNN messages
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress INFO and WARNING messages
+_TF_MODULE = None
+_KERAS_MODULE = None
+_LAYERS_MODULE = None
 
-# Try to import TensorFlow/Keras for CNN
-try:
-    import tensorflow as tf
-    # Set TensorFlow logging level to suppress INFO messages
-    tf.get_logger().setLevel('ERROR')
-    from tensorflow import keras
-    from tensorflow.keras import layers
-    TF_AVAILABLE = True
-except ImportError:
-    TF_AVAILABLE = False
-    print("Warning: TensorFlow not available. CNN model will not work.")
-    print("Install with: pip install tensorflow")
+
+def _load_tensorflow():
+    """Import TensorFlow lazily so the main app does not load native TF libs at startup."""
+    global _TF_MODULE, _KERAS_MODULE, _LAYERS_MODULE
+    if _TF_MODULE is not None:
+        return _TF_MODULE, _KERAS_MODULE, _LAYERS_MODULE
+    try:
+        import tensorflow as tf
+
+        tf.get_logger().setLevel("ERROR")
+        from tensorflow import keras
+        from tensorflow.keras import layers
+
+        _TF_MODULE = tf
+        _KERAS_MODULE = keras
+        _LAYERS_MODULE = layers
+        return tf, keras, layers
+    except ImportError as exc:
+        raise ImportError(
+            "TensorFlow is required for CNN model. "
+            "Install with: pip install tensorflow"
+        ) from exc
+
+
+def tensorflow_available() -> bool:
+    try:
+        _load_tensorflow()
+        return True
+    except ImportError:
+        return False
 
 
 class ScorecardModel:
@@ -82,7 +106,7 @@ class ScorecardModel:
                    if k not in ['random_state']}
             )
         elif model_type == 'cnn':
-            if not TF_AVAILABLE:
+            if not tensorflow_available():
                 raise ImportError(
                     "TensorFlow is required for CNN model. "
                     "Install with: pip install tensorflow"
@@ -97,12 +121,11 @@ class ScorecardModel:
     
     def _create_cnn_model(self, **params):
         """Create CNN model for 28x28 image input."""
+        tf, keras, layers = _load_tensorflow()
         # Clear any existing TensorFlow graph/session to avoid name_scope issues
         try:
-            import tensorflow as tf
-            # Clear default graph and reset name scope stack
             tf.keras.backend.clear_session()
-        except:
+        except Exception:
             pass
         
         input_shape = (28, 28, 1)

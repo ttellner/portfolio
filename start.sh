@@ -7,6 +7,14 @@ STREAMLIT_MONITOR_INTERVAL="${STREAMLIT_MONITOR_INTERVAL:-15}"
 
 mkdir -p /var/log
 
+# Avoid native protobuf / BLAS crashes in slim containers (Railway/App Runner).
+export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1
+export TF_ENABLE_ONEDNN_OPTS=0
+export TF_CPP_MIN_LOG_LEVEL=2
+
 # ---------------------------------------------------------------------------
 # Optional Tailscale (invite-only remote Ollama via OLLAMA_HOST=http://100.x.x.x)
 # Set TS_AUTHKEY in Railway Variables. Uses userspace networking (no TUN device).

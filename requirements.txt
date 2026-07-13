@@ -7,10 +7,12 @@ streamlit-embedcode
 pandas>=1.5.0,<2.0.0
 numpy>=1.23.0,<2.0.0
 
-# Machine Learning
+# Machine Learning (TensorFlow is optional — see pages/bankingprojects/requirements.txt)
 scikit-learn>=1.2.0,<2.0.0
 imbalanced-learn>=0.10.0
-tensorflow>=2.15.1
+
+# Protobuf: avoid C++ implementation segfaults with Streamlit on Linux containers
+protobuf>=4.25.0,<6
 
 # Visualization
 matplotlib>=3.5.0
